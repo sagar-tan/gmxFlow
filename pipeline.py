@@ -165,6 +165,7 @@ class PipelineExecutor:
         stderr_lines = []
         
         # Use shell=True to handle command chaining (&&)
+        # Pass env to ensure CUDA/GPU environment variables are available
         process = subprocess.Popen(
             command,
             shell=True,
@@ -172,7 +173,8 @@ class PipelineExecutor:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1
+            bufsize=1,
+            env=os.environ
         )
         self.current_process = process
         
