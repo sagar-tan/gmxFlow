@@ -7,7 +7,7 @@ Usage:
     gmxflow [--version] [--help] [--dry-run] [--protein] [--ligand]
 
 Author: gmxFlow Development Team
-Version: 2.0.0
+Version: 2026.0.1
 """
 
 import sys
@@ -402,6 +402,67 @@ class GmxFlowApp:
         self.add_log("Generated MDP files", "INFO")
         input("\n[Press Enter to continue...]")
     
+    def _offer_post_step_viz(self, step_id: int):
+        """Offer visualization options after certain steps complete."""
+        import os
+        
+        # Energy Minimization - offer potential energy plot
+        if step_id == 6 and self.mode == "protein_only":
+            em_edr = os.path.join(self.working_dir, "em.edr")
+            if os.path.exists(em_edr):
+                self.console.print("\n[cyan]📊 Visualization available:[/]")
+                self.console.print("   Extract potential energy: [dim]gmx energy -f em.edr -o potential.xvg[/]")
+                if self.confirm("Extract potential energy now?"):
+                    os.system(f"cd {self.working_dir} && echo '10\n0' | gmx energy -f em.edr -o potential.xvg")
+                    pot_file = os.path.join(self.working_dir, "potential.xvg")
+                    if os.path.exists(pot_file):
+                        self.console.print("[green]✓ Created potential.xvg[/]")
+                        self.add_log("Created potential.xvg", "INFO")
+        
+        # Same for ligand mode EM (step 5)
+        if step_id == 5 and self.mode == "protein_ligand":
+            em_edr = os.path.join(self.working_dir, "em.edr")
+            if os.path.exists(em_edr):
+                self.console.print("\n[cyan]📊 Visualization available:[/]")
+                self.console.print("   Extract potential energy: [dim]gmx energy -f em.edr -o potential.xvg[/]")
+                if self.confirm("Extract potential energy now?"):
+                    os.system(f"cd {self.working_dir} && echo '10\n0' | gmx energy -f em.edr -o potential.xvg")
+                    if os.path.exists(os.path.join(self.working_dir, "potential.xvg")):
+                        self.console.print("[green]✓ Created potential.xvg[/]")
+        
+        # NVT/NPT - offer temperature/pressure plots
+        if step_id == 7:  # NVT
+            nvt_edr = os.path.join(self.working_dir, "nvt.edr")
+            if os.path.exists(nvt_edr):
+                self.console.print("\n[cyan]📊 Available:[/] Temperature plot (temperature.xvg)")
+                if self.confirm("Extract temperature?"):
+                    os.system(f"cd {self.working_dir} && echo '16\n0' | gmx energy -f nvt.edr -o temperature.xvg")
+                    if os.path.exists(os.path.join(self.working_dir, "temperature.xvg")):
+                        self.console.print("[green]✓ Created temperature.xvg[/]")
+        
+        if step_id == 8:  # NPT
+            npt_edr = os.path.join(self.working_dir, "npt.edr")
+            if os.path.exists(npt_edr):
+                self.console.print("\n[cyan]📊 Available:[/] Pressure/Density plots")
+                if self.confirm("Extract pressure and density?"):
+                    os.system(f"cd {self.working_dir} && echo '18\n0' | gmx energy -f npt.edr -o pressure.xvg")
+                    os.system(f"cd {self.working_dir} && echo '24\n0' | gmx energy -f npt.edr -o density.xvg")
+                    self.console.print("[green]✓ Created pressure.xvg and density.xvg[/]")
+        
+        # Production MD - offer VMD launch
+        if step_id == 9:
+            md_xtc = os.path.join(self.working_dir, "md.xtc")
+            md_gro = os.path.join(self.working_dir, "md.gro")
+            if os.path.exists(md_xtc) and os.path.exists(md_gro):
+                self.console.print("\n[cyan]🎬 Trajectory viewer available![/]")
+                self.console.print("   Launch VMD: [dim]vmd md.gro md.xtc[/]")
+                if self.confirm("Launch VMD now?"):
+                    result = os.system(f"cd {self.working_dir} && vmd md.gro md.xtc &")
+                    if result == 0:
+                        self.console.print("[green]✓ VMD launched[/]")
+                    else:
+                        self.console.print("[yellow]VMD not available or failed to launch[/]")
+    
     def run_pipeline_step(self, step_id: int):
         """Execute a pipeline step with locking and resume detection."""
         step = self.pipeline.get_step(step_id)
@@ -469,6 +530,9 @@ class GmxFlowApp:
                 else:
                     self.console.print(f"[red]✗ {msg}[/]")
                     self.add_log(msg, "WARNING")
+            
+            # Post-step visualization prompts
+            self._offer_post_step_viz(step_id)
             
             input("\n[Press Enter to continue...]")
             return True

@@ -8,7 +8,7 @@ from typing import List, Optional, Dict
 
 # Application metadata
 APP_NAME = "gmxFlow"
-APP_VERSION = "1.0.0"
+APP_VERSION = "2026.0.1"
 APP_DESCRIPTION = "GROMACS Pipeline Manager"
 
 # Mandatory input files
