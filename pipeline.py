@@ -187,9 +187,11 @@ class PipelineExecutor:
             target=read_stream,
             args=(process.stdout, stdout_lines)
         )
+        # Note: GROMACS writes most output to stderr, not just errors
+        # So we don't prefix stderr with [ERR] to avoid confusion
         stderr_thread = threading.Thread(
             target=read_stream,
-            args=(process.stderr, stderr_lines, "[ERR] ")
+            args=(process.stderr, stderr_lines, "")
         )
         
         stdout_thread.start()

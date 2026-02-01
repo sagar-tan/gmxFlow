@@ -292,3 +292,134 @@ def check_output_exists(step_id: int, directory: str = ".") -> Tuple[bool, List[
     
     return len(existing) > 0, existing
 
+
+# === Topology Patching (Auto-add ligand after Step 4) ===
+
+def get_ligand_name_from_itp(itp_path: str) -> Optional[str]:
+    """
+    Extract ligand molecule name from ligand.itp file.
+    Looks for [ moleculetype ] section.
+    """
+    if not os.path.exists(itp_path):
+        return None
+    
+    try:
+        with open(itp_path, 'r') as f:
+            in_moleculetype = False
+            for line in f:
+                line = line.strip()
+                if line.startswith('[ moleculetype ]'):
+                    in_moleculetype = True
+                    continue
+                if in_moleculetype and line and not line.startswith(';') and not line.startswith('['):
+                    # First non-comment line after [ moleculetype ]
+                    parts = line.split()
+                    if parts:
+                        return parts[0]  # Molecule name is first column
+    except Exception:
+        pass
+    return None
+
+
+def patch_topology_for_ligand(
+    topol_path: str,
+    ligand_itp: str = "ligand.itp",
+    ligand_name: Optional[str] = None,
+    directory: str = "."
+) -> Tuple[bool, str]:
+    """
+    Automatically patch topol.top to include ligand.
+    
+    Adds:
+    1. #include "ligand.itp" after forcefield include
+    2. Ligand entry in [ molecules ] section
+    
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    full_topol = os.path.join(directory, topol_path)
+    full_itp = os.path.join(directory, ligand_itp)
+    
+    if not os.path.exists(full_topol):
+        return False, f"Topology file not found: {topol_path}"
+    
+    if not os.path.exists(full_itp):
+        return False, f"Ligand ITP not found: {ligand_itp}"
+    
+    # Get ligand name from ITP if not provided
+    if not ligand_name:
+        ligand_name = get_ligand_name_from_itp(full_itp)
+        if not ligand_name:
+            ligand_name = "UNK"  # Default fallback
+    
+    try:
+        with open(full_topol, 'r') as f:
+            lines = f.readlines()
+        
+        # Check if already patched
+        include_line = f'#include "{ligand_itp}"'
+        already_included = any(include_line in line for line in lines)
+        
+        if already_included:
+            return True, f"Topology already contains {ligand_itp}"
+        
+        # Find insertion points
+        new_lines = []
+        ff_include_found = False
+        molecules_section = False
+        ligand_added = False
+        
+        for i, line in enumerate(lines):
+            new_lines.append(line)
+            
+            # Add ligand.itp after forcefield.itp include
+            if not ff_include_found and '#include' in line and 'forcefield.itp' in line:
+                new_lines.append(f'; Include ligand topology\n')
+                new_lines.append(f'{include_line}\n')
+                new_lines.append('\n')
+                ff_include_found = True
+            
+            # Track [ molecules ] section to add ligand at end
+            if '[ molecules ]' in line:
+                molecules_section = True
+        
+        # Add ligand to molecules section (at the end, before SOL)
+        # We need to find the last molecule entry and add ligand before SOL
+        final_lines = []
+        sol_found = False
+        
+        for line in new_lines:
+            # Insert ligand before SOL line
+            stripped = line.strip()
+            if molecules_section and stripped.startswith('SOL') and not ligand_added:
+                final_lines.append(f'{ligand_name:<20} 1\n')
+                ligand_added = True
+            final_lines.append(line)
+        
+        # If no SOL found, add at the very end
+        if not ligand_added:
+            final_lines.append(f'{ligand_name:<20} 1\n')
+        
+        # Write back
+        with open(full_topol, 'w') as f:
+            f.writelines(final_lines)
+        
+        return True, f"Patched topology: added {ligand_itp} and {ligand_name} molecule"
+        
+    except Exception as e:
+        return False, f"Failed to patch topology: {str(e)}"
+
+
+def check_topology_has_ligand(topol_path: str, directory: str = ".") -> bool:
+    """Check if topology already includes a ligand."""
+    full_path = os.path.join(directory, topol_path)
+    if not os.path.exists(full_path):
+        return False
+    
+    try:
+        with open(full_path, 'r') as f:
+            content = f.read()
+            return 'ligand.itp' in content
+    except Exception:
+        return False
+

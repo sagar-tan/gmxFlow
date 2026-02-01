@@ -72,18 +72,12 @@ PIPELINE_STEPS = [
         name="Solvate System",
         command="gmx solvate -cp complex_box.gro -cs spc216.gro -o complex_solv.gro -p topol.top",
         produces=["complex_solv.gro"],
-        manual_intervention={
-            "file": "topol.top",
-            "actions": [
-                "Include ligand.itp",
-                "Add ligand entry in [ molecules ] section"
-            ]
-        }
+        post_steps=["Auto-patch topol.top with ligand"]
     ),
     PipelineStep(
         id=5,
         name="Energy Minimization",
-        command="gmx grompp -f minim.mdp -c complex_solv.gro -p topol.top -o em.tpr && gmx mdrun -v -deffnm em",
+        command="gmx grompp -f minim.mdp -c complex_solv.gro -p topol.top -o em.tpr -maxwarn 1 && gmx mdrun -v -deffnm em",
         produces=["em.gro", "em.edr"]
     ),
     PipelineStep(
@@ -95,19 +89,19 @@ PIPELINE_STEPS = [
     PipelineStep(
         id=7,
         name="NVT Equilibration",
-        command="gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -n index.ndx -o nvt.tpr && gmx mdrun -v -deffnm nvt",
+        command="gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -n index.ndx -o nvt.tpr -maxwarn 1 && gmx mdrun -v -deffnm nvt",
         produces=["nvt.gro", "nvt.edr"]
     ),
     PipelineStep(
         id=8,
         name="NPT Equilibration",
-        command="gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -n index.ndx -o npt.tpr && gmx mdrun -v -deffnm npt",
+        command="gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -n index.ndx -o npt.tpr -maxwarn 1 && gmx mdrun -v -deffnm npt",
         produces=["npt.gro", "npt.edr"]
     ),
     PipelineStep(
         id=9,
         name="Production MD",
-        command="gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -n index.ndx -o md.tpr && gmx mdrun -v -deffnm md",
+        command="gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -n index.ndx -o md.tpr -maxwarn 1 && gmx mdrun -v -deffnm md",
         produces=["md.xtc", "md.edr", "md.gro"]
     ),
 ]

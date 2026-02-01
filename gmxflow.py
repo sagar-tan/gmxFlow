@@ -39,7 +39,8 @@ from utils import (
     check_gromacs_available, check_mandatory_files,
     validate_step_ready, format_log_line,
     check_step_dependencies, is_step_complete, mark_step_complete,
-    clear_all_flags, check_output_exists, STEP_NAMES
+    clear_all_flags, check_output_exists, STEP_NAMES,
+    patch_topology_for_ligand
 )
 from pipeline import PipelineExecutor, StepStatus
 from analysis import AnalysisRunner
@@ -79,6 +80,10 @@ class GmxFlowApp:
     def clear_screen(self):
         """Clear the terminal screen."""
         os.system('cls' if os.name == 'nt' else 'clear')
+    
+    def print_separator(self):
+        """Print a visual separator instead of clearing."""
+        print("\n" + "=" * 60 + "\n")
     
     def prompt(self, message: str, choices: list = None, default: str = None) -> str:
         """Cross-compatible prompt."""
@@ -337,6 +342,19 @@ class GmxFlowApp:
             self.console.print(f"\n[green]✓ Step {step_id} completed successfully![/]")
             if step.produces:
                 self.console.print(f"[dim]  Produced: {', '.join(step.produces)}[/]")
+            
+            # === AUTO-PATCH TOPOLOGY AFTER STEP 4 ===
+            if step_id == 4:
+                self.console.print("\n[cyan]>>> Auto-patching topol.top with ligand...[/]")
+                success, msg = patch_topology_for_ligand("topol.top", "ligand.itp", directory=self.working_dir)
+                if success:
+                    self.console.print(f"[green]✓ {msg}[/]")
+                    self.add_log(msg, "INFO")
+                else:
+                    self.console.print(f"[red]✗ {msg}[/]")
+                    self.console.print("[yellow]Please manually edit topol.top to add ligand.itp[/]")
+                    self.add_log(msg, "WARNING")
+            
             input("\n[Press Enter to continue...]")
             return True
         else:
@@ -349,8 +367,8 @@ class GmxFlowApp:
     
     def run_full_pipeline(self):
         """Run all pipeline steps in sequence."""
-        self.clear_screen()
-        self.console.print(f"\n[bold cyan]>>> Full Pipeline Execution[/]")
+        self.print_separator()
+        self.console.print(f"[bold cyan]>>> Full Pipeline Execution[/]")
         
         if self.dry_run:
             self.console.print("[bold yellow]DRY-RUN MODE: Showing all commands without execution[/]\n")
@@ -382,7 +400,7 @@ class GmxFlowApp:
     
     def show_analysis_menu(self):
         """Display and handle the analysis menu."""
-        self.clear_screen()
+        self.print_separator()
         self.console.print("[bold cyan]Analysis Tools[/]\n")
         
         # Check if MD complete
@@ -422,7 +440,7 @@ class GmxFlowApp:
     
     def show_visualization_menu(self):
         """Display and handle the visualization menu."""
-        self.clear_screen()
+        self.print_separator()
         self.console.print("[bold cyan]Visualization Tools[/]\n")
         
         options = self.visualization.get_visualization_options()
@@ -463,7 +481,7 @@ class GmxFlowApp:
     
     def show_file_check(self):
         """Display detailed file check."""
-        self.clear_screen()
+        self.print_separator()
         self.console.print("[bold cyan]Input File Check[/]\n")
         
         found, missing = check_mandatory_files(MANDATORY_FILES, self.working_dir)
@@ -478,7 +496,7 @@ class GmxFlowApp:
     
     def show_help(self):
         """Display help information."""
-        self.clear_screen()
+        self.print_separator()
         
         help_text = """
 # gmxFlow Help
