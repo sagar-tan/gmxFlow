@@ -32,19 +32,36 @@ echo "Installing Nuitka..."
 pip install --upgrade pip
 pip install nuitka ordered-set rich pyyaml
 
+# Find the actual rich unicode data path
+RICH_UNICODE_PATH=$(find build_venv -name "_unicode_data" -type d 2>/dev/null | head -1)
+
 # Build with Nuitka
 echo "Building binary (this may take 5-10 minutes)..."
-python3 -m nuitka \
-    --standalone \
-    --onefile \
-    --follow-imports \
-    --include-package=rich \
-    --include-data-dir=build_venv/lib/python*/site-packages/rich/_unicode_data=rich/_unicode_data \
-    --output-filename=gmflo \
-    --output-dir=dist \
-    --remove-output \
-    --assume-yes-for-downloads \
-    gmxflow.py
+if [ -n "$RICH_UNICODE_PATH" ]; then
+    python3 -m nuitka \
+        --standalone \
+        --onefile \
+        --follow-imports \
+        --include-package=rich \
+        --include-data-dir="$RICH_UNICODE_PATH"=rich/_unicode_data \
+        --output-filename=gmflo \
+        --output-dir=dist \
+        --remove-output \
+        --assume-yes-for-downloads \
+        gmxflow.py
+else
+    # Fallback without explicit unicode data (Nuitka might handle it)
+    python3 -m nuitka \
+        --standalone \
+        --onefile \
+        --follow-imports \
+        --include-package=rich \
+        --output-filename=gmflo \
+        --output-dir=dist \
+        --remove-output \
+        --assume-yes-for-downloads \
+        gmxflow.py
+fi
 
 # Check output
 if [ -f "dist/gmflo" ]; then
