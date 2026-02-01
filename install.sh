@@ -1,10 +1,10 @@
 #!/bin/bash
 # gmxFlow One-Line Installer
-# Usage: curl -sSL https://raw.githubusercontent.com/USER/gmxFlow/main/install.sh | sudo bash
+# Usage: curl -sSL https://raw.githubusercontent.com/sagar-tan/gmxFlow/main/install.sh | sudo bash
 
 set -e
 
-REPO_URL="https://github.com/USER/gmxFlow.git"  # <-- Update with your repo
+REPO_URL="https://github.com/sagar-tan/gmxFlow.git"
 INSTALL_DIR="/usr/local/gmxflow"
 BIN_LINK="/usr/local/bin/gmflo"
 
@@ -35,7 +35,7 @@ if command -v git &> /dev/null; then
 else
     echo "Git not found, using wget..."
     mkdir -p /tmp/gmxflow-install
-    wget -qO- https://github.com/USER/gmxFlow/archive/main.tar.gz | tar xz -C /tmp/gmxflow-install --strip-components=1
+    wget -qO- https://github.com/sagar-tan/gmxFlow/archive/main.tar.gz | tar xz -C /tmp/gmxflow-install --strip-components=1
 fi
 
 # Install to /usr/local/gmxflow
@@ -56,12 +56,12 @@ cat > "/usr/local/bin/gmflo-update" << 'UPDATEEOF'
 #!/bin/bash
 # gmxFlow Updater
 set -e
-REPO_URL="https://github.com/USER/gmxFlow.git"
+REPO_URL="https://github.com/sagar-tan/gmxFlow.git"
 echo "Updating gmxFlow..."
 rm -rf /tmp/gmxflow-update
 git clone --depth 1 "$REPO_URL" /tmp/gmxflow-update 2>/dev/null || {
     mkdir -p /tmp/gmxflow-update
-    wget -qO- https://github.com/USER/gmxFlow/archive/main.tar.gz | tar xz -C /tmp/gmxflow-update --strip-components=1
+    wget -qO- https://github.com/sagar-tan/gmxFlow/archive/main.tar.gz | tar xz -C /tmp/gmxflow-update --strip-components=1
 }
 sudo cp /tmp/gmxflow-update/*.py /usr/local/gmxflow/
 rm -rf /tmp/gmxflow-update

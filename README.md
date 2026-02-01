@@ -8,13 +8,13 @@ Terminal UI for GROMACS molecular dynamics simulation pipelines.
 
 ### One-Line Install (Linux/WSL)
 ```bash
-# Replace USER with your GitHub username
+curl -sSL https://raw.githubusercontent.com/sagar-tan/gmxFlow/main/install.sh | sudo bash
 curl -sSL https://raw.githubusercontent.com/USER/gmxFlow/main/install.sh | sudo bash
 ```
 
 ### Manual Install
 ```bash
-git clone https://github.com/USER/gmxFlow.git
+git clone https://github.com/sagar-tan/gmxFlow.git
 cd gmxFlow
 sudo ./install.sh
 ```
