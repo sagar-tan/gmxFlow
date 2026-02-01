@@ -6,24 +6,32 @@ Terminal UI for GROMACS molecular dynamics simulation pipelines.
 
 ## Installation
 
-### One-Line Install (Linux/WSL)
+### Option 1: pip install (Recommended - always gets latest)
 ```bash
-curl -sSL https://raw.githubusercontent.com/sagar-tan/gmxFlow/main/install.sh | sudo bash
-curl -sSL https://raw.githubusercontent.com/USER/gmxFlow/main/install.sh | sudo bash
+pip3 install --user git+https://github.com/sagar-tan/gmxFlow.git
+
+# Add to PATH if needed
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-### Manual Install
+### Option 2: Clone and install
 ```bash
 git clone https://github.com/sagar-tan/gmxFlow.git
 cd gmxFlow
-sudo ./install.sh
+pip3 install --user .
 ```
 
-### Portable (No Install)
+### Option 3: Portable (no install)
 ```bash
-git clone https://github.com/USER/gmxFlow.git
+git clone https://github.com/sagar-tan/gmxFlow.git
 cd gmxFlow
 python3 gmxflow.py
+```
+
+## Update
+```bash
+pip3 install --user --upgrade git+https://github.com/sagar-tan/gmxFlow.git
 ```
 
 ## Usage
@@ -69,16 +77,8 @@ gmflo --version    # Show version
 - GROMACS (`gmx` in PATH)
 - Optional: `rich` (colors), VMD, xmgrace
 
-## Update
-
-```bash
-sudo gmflo-update
-```
-
 ## Uninstall
 
 ```bash
-sudo /usr/local/gmxflow/uninstall.sh
-# or
-sudo rm -rf /usr/local/gmxflow /usr/local/bin/gmflo
+pip3 uninstall gmxflow
 ```
