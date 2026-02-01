@@ -2,110 +2,77 @@
 
 Terminal UI for GROMACS molecular dynamics simulation pipelines.
 
-## Quick Start (Linux/WSL)
+**Version: 2026.0.1**
 
+## Installation
+
+### One-Line Install (Linux/WSL)
 ```bash
-# 1. Copy gmxflow to your simulation directory
-cp -r /path/to/gmxFlow/* /path/to/simulation/
-
-# 2. Ensure GROMACS is available
-source /usr/local/gromacs/bin/GMXRC  # or your GROMACS path
-
-# 3. Run gmxFlow
-python3 gmxflow.py
-
-# OR install globally (optional)
-chmod +x gmxflow.py
-sudo cp gmxflow.py /usr/local/bin/gmxflow
+# Replace USER with your GitHub username
+curl -sSL https://raw.githubusercontent.com/USER/gmxFlow/main/install.sh | sudo bash
 ```
 
-## Required Input Files
+### Manual Install
+```bash
+git clone https://github.com/USER/gmxFlow.git
+cd gmxFlow
+sudo ./install.sh
+```
 
-Place these files in your simulation directory:
-- `protein_only.pdb` - Protein structure
-- `ligand.gro` - Ligand coordinates
-- `ligand.itp` - Ligand topology
-- `minim.mdp`, `nvt.mdp`, `npt.mdp`, `md.mdp` - Parameter files
+### Portable (No Install)
+```bash
+git clone https://github.com/USER/gmxFlow.git
+cd gmxFlow
+python3 gmxflow.py
+```
 
 ## Usage
 
 ```bash
-# Normal mode
-python3 gmxflow.py
-
-# Dry-run mode (shows commands without executing)
-python3 gmxflow.py --dry-run
-
-# Check version
-python3 gmxflow.py --version
+gmflo              # Run gmxFlow (mode selection)
+gmflo --protein    # Protein-only mode
+gmflo --ligand     # Protein+Ligand mode
+gmflo --dry-run    # Preview commands
+gmflo --version    # Show version
 ```
 
-## Pipeline Steps
+## Simulation Modes
 
-| # | Step | Notes |
-|---|------|-------|
-| 1 | Generate Topology | **Interactive**: Select force field 15 (OPLS-AA) |
-| 2 | Insert Ligand | Automatic |
-| 3 | Define Box | Automatic |
-| 4 | Solvate | **Manual edit needed after** - see below |
-| 5 | Energy Minimization | Automatic |
-| 6 | Index Generation | **Interactive**: Create protein+ligand group |
-| 7 | NVT Equilibration | Automatic |
-| 8 | NPT Equilibration | Automatic |
-| 9 | Production MD | Automatic |
-
-## Step Locking
-
-Steps must run in order. Each creates a `.step#.done` flag.
-- Step 5 won't run until Steps 1-4 complete
-- Analysis won't run until Step 9 completes
-
-## Manual Edit After Step 4
-
-Edit `topol.top`:
-```
-; Add after #include "forcefield.itp"
-#include "ligand.itp"
-
-; Add to [ molecules ] section at bottom
-UNK     1
-```
+| Mode | Input Files | Steps |
+|------|-------------|-------|
+| Protein Only | `Protein.pdb` | 9 (with ion neutralization) |
+| Protein+Ligand | `protein_only.pdb`, `ligand.gro`, `ligand.itp` | 9 (auto-patches topology) |
 
 ## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `1-9` | Run pipeline step |
-| `P` | **Run full pipeline** |
-| `A` | Analysis tools |
-| `V` | Visualization (VMD/xmgrace) |
-| `F` | File check |
-| `R` | Reset all .done flags |
+| `1-9` | Run step |
+| `P` | Full pipeline |
+| `S` | Settings |
+| `G` | Generate MDP |
+| `A` | Analysis |
+| `M` | Switch mode |
+| `R` | Reset flags |
 | `Q` | Quit |
 
-## Testing in WSL
+## Post-Step Visualizations
 
-```bash
-# In WSL, navigate to simulation folder with input files
-cd /mnt/c/your/simulation/folder
-
-# Copy gmxFlow files here (or access from Windows path)
-cp /path/to/gmxFlow/*.py .
-
-# Run
-python3 gmxflow.py
-```
+- **After EM**: potential.xvg
+- **After NVT**: temperature.xvg  
+- **After NPT**: pressure.xvg, density.xvg
+- **After MD**: Launch VMD
 
 ## Dependencies
 
-- **Python 3.8+**
-- **GROMACS** (`gmx` in PATH)
-- **Optional**: `rich` library (falls back to plain text if missing)
-- **Optional**: VMD, xmgrace
+- Python 3.8+
+- GROMACS (`gmx` in PATH)
+- Optional: `rich` (colors), VMD, xmgrace
 
-## No Virtual Environment Required
+## Uninstall
 
-Works with system Python. Install rich optionally:
 ```bash
-pip3 install rich  # Optional, for colored output
+sudo /usr/local/gmxflow/uninstall.sh
+# or
+sudo rm -rf /usr/local/gmxflow /usr/local/bin/gmflo
 ```
