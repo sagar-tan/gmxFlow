@@ -120,17 +120,17 @@ class AnalysisStep:
 ANALYSIS_STEPS = [
     AnalysisStep(
         name="Trajectory Cleaning",
-        command="gmx trjconv -s md.tpr -f md.xtc -o md_fit.xtc -center -pbc mol -ur compact -fit rot+trans",
+        command="echo '1\n0' | gmx trjconv -s md.tpr -f md.xtc -o md_fit.xtc -center -pbc mol -ur compact -fit rot+trans",
         output_file="md_fit.xtc"
     ),
     AnalysisStep(
         name="Backbone RMSD",
-        command="gmx rms -s md.tpr -f md_fit.xtc -n index.ndx -o rmsd_backbone.xvg",
+        command="echo '4\n4' | gmx rms -s md.tpr -f md_fit.xtc -n index.ndx -o rmsd_backbone.xvg",
         output_file="rmsd_backbone.xvg"
     ),
     AnalysisStep(
         name="Ligand RMSD",
-        command="gmx rms -s md.tpr -f md_fit.xtc -n index.ndx -o rmsd_ligand.xvg",
+        command="echo '13\n13' | gmx rms -s md.tpr -f md_fit.xtc -n index.ndx -o rmsd_ligand.xvg",
         output_file="rmsd_ligand.xvg"
     ),
     AnalysisStep(
