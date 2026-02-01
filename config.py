@@ -51,9 +51,8 @@ PIPELINE_STEPS = [
     PipelineStep(
         id=1,
         name="Generate Protein Topology",
-        command="gmx pdb2gmx -f protein_only.pdb -o protein.gro -water spce -ignh",
-        produces=["protein.gro", "topol.top"],
-        user_input_required=True
+        command="echo '15' | gmx pdb2gmx -f protein_only.pdb -o protein.gro -water spce -ignh",
+        produces=["protein.gro", "topol.top"]
     ),
     PipelineStep(
         id=2,
@@ -164,9 +163,8 @@ PROTEIN_PIPELINE_STEPS = [
     PipelineStep(
         id=2,
         name="Protein Topology Generation",
-        command="gmx pdb2gmx -f clean.pdb -o protein.gro -water spce -ignh",
-        produces=["protein.gro", "topol.top"],
-        user_input_required=True
+        command="echo '15' | gmx pdb2gmx -f clean.pdb -o protein.gro -water spce -ignh",
+        produces=["protein.gro", "topol.top"]
     ),
     PipelineStep(
         id=3,
@@ -183,9 +181,8 @@ PROTEIN_PIPELINE_STEPS = [
     PipelineStep(
         id=5,
         name="Add Ions (Neutralize)",
-        command="gmx grompp -f ions.mdp -c solve.gro -p topol.top -o ions.tpr -maxwarn 1 && gmx genion -s ions.tpr -o solve_ions.gro -p topol.top -pname NA -nname CL -neutral",
-        produces=["solve_ions.gro"],
-        user_input_required=True
+        command="gmx grompp -f ions.mdp -c solve.gro -p topol.top -o ions.tpr -maxwarn 1 && echo '13' | gmx genion -s ions.tpr -o solve_ions.gro -p topol.top -pname NA -nname CL -neutral",
+        produces=["solve_ions.gro"]
     ),
     PipelineStep(
         id=6,
