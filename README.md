@@ -10,7 +10,7 @@ Terminal UI for GROMACS molecular dynamics simulation pipelines.
 curl -sSL https://bit.ly/gmxFlow-1 | sudo bash
 ```
 
-> License key required. Workshop participants receive keys during the session.
+> **Note:** Requires a valid license key (provided during workshop).
 
 ## Update
 
@@ -40,7 +40,7 @@ gmflo --version    # Show version
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.8+ (for running source)
 - GROMACS (`gmx` in PATH)
 - License key (workshop exclusive)
 
