@@ -14,15 +14,18 @@ if [[ "$OSTYPE" != "linux-gnu"* ]]; then
     exit 1
 fi
 
-# Install PyInstaller if needed
-if ! command -v pyinstaller &> /dev/null; then
-    echo "Installing PyInstaller..."
-    pip3 install --user pyinstaller
-fi
+# Create a temporary virtual environment for building
+echo "Creating build environment..."
+python3 -m venv build_venv
+source build_venv/bin/activate
+
+# Install PyInstaller
+echo "Installing dependencies..."
+pip install pyinstaller rich pyyaml
 
 # Create single file binary
 echo "Building binary..."
-~/.local/bin/pyinstaller \
+pyinstaller \
     --onefile \
     --name gmflo \
     --clean \
@@ -51,6 +54,10 @@ if [ -f "dist/gmflo" ]; then
     echo "  Binary: dist/gmflo"
     echo "  Size: $(du -h dist/gmflo | cut -f1)"
     echo ""
+    echo "Cleaning up..."
+    deactivate
+    rm -rf build_venv build gmxflow.spec
+    
     echo "Next steps:"
     echo "  1. Test: ./dist/gmflo --version"
     echo "  2. Upload to GitHub Releases"
