@@ -4,10 +4,10 @@ gmxFlow - GROMACS Pipeline Manager
 A terminal user interface for running molecular dynamics simulations.
 
 Usage:
-    gmxflow [--version] [--help] [--dry-run]
+    gmxflow [--version] [--help] [--dry-run] [--protein] [--ligand]
 
 Author: gmxFlow Development Team
-Version: 1.0.0
+Version: 2.0.0
 """
 
 import sys
@@ -33,6 +33,7 @@ except ImportError:
 from config import (
     APP_NAME, APP_VERSION, APP_DESCRIPTION, BANNER,
     PIPELINE_STEPS, ANALYSIS_STEPS, MANDATORY_FILES,
+    PROTEIN_PIPELINE_STEPS, PROTEIN_ANALYSIS_STEPS, PROTEIN_MANDATORY_FILES,
     STATUS_SYMBOLS
 )
 from utils import (
@@ -41,6 +42,10 @@ from utils import (
     check_step_dependencies, is_step_complete, mark_step_complete,
     clear_all_flags, check_output_exists, STEP_NAMES,
     patch_topology_for_ligand
+)
+from settings import (
+    load_settings, save_settings, DEFAULT_SETTINGS,
+    generate_all_mdp_files, get_md_steps
 )
 from pipeline import PipelineExecutor, StepStatus
 from analysis import AnalysisRunner
@@ -51,7 +56,6 @@ class PlainConsole:
     """Fallback console when rich is not available."""
     
     def print(self, text, **kwargs):
-        # Strip rich markup for plain output
         import re
         clean = re.sub(r'\[/?[^\]]+\]', '', str(text))
         print(clean)
@@ -60,15 +64,42 @@ class PlainConsole:
 class GmxFlowApp:
     """Main gmxFlow TUI Application."""
     
-    def __init__(self, dry_run: bool = False):
+    def __init__(self, dry_run: bool = False, mode: str = None):
         self.console = Console() if RICH_AVAILABLE else PlainConsole()
         self.working_dir = os.getcwd()
-        self.pipeline = PipelineExecutor(self.working_dir)
-        self.analysis = AnalysisRunner(self.working_dir)
-        self.visualization = VisualizationManager(self.working_dir)
         self.log_messages: list = []
         self.max_log_lines = 15
         self.dry_run = dry_run
+        
+        # Load settings
+        self.settings = load_settings(self.working_dir)
+        
+        # Simulation mode (protein_only or protein_ligand)
+        if mode:
+            self.mode = mode
+        else:
+            self.mode = self.settings.get("simulation_mode", "protein_only")
+        
+        # Set pipeline based on mode
+        self._update_mode_config()
+        
+        # Initialize components
+        self.pipeline = PipelineExecutor(self.working_dir, self.current_steps)
+        self.analysis = AnalysisRunner(self.working_dir)
+        self.visualization = VisualizationManager(self.working_dir)
+    
+    def _update_mode_config(self):
+        """Update pipeline config based on mode."""
+        if self.mode == "protein_ligand":
+            self.current_steps = PIPELINE_STEPS
+            self.current_analysis = ANALYSIS_STEPS
+            self.current_files = MANDATORY_FILES
+            self.mode_name = "Protein + Ligand"
+        else:
+            self.current_steps = PROTEIN_PIPELINE_STEPS
+            self.current_analysis = PROTEIN_ANALYSIS_STEPS
+            self.current_files = PROTEIN_MANDATORY_FILES
+            self.mode_name = "Protein Only"
     
     def add_log(self, message: str, level: str = "INFO"):
         """Add a message to the log."""
@@ -107,11 +138,46 @@ class GmxFlowApp:
             print(f"{message} [y/n]: ", end="")
             return input().strip().lower() in ['y', 'yes']
     
+    def show_mode_selection(self) -> str:
+        """Display mode selection screen on startup."""
+        self.clear_screen()
+        
+        if RICH_AVAILABLE:
+            banner_text = Text(BANNER, style="bold cyan")
+            self.console.print(Panel(
+                banner_text,
+                subtitle=f"{APP_DESCRIPTION} v{APP_VERSION}",
+                border_style="cyan",
+                padding=(0, 2)
+            ))
+            
+            self.console.print("\n[bold white]Select Simulation Type:[/]\n")
+            self.console.print("  [bold cyan][1][/] Protein Only")
+            self.console.print("      [dim]Single protein in water with ions[/]")
+            self.console.print("  [bold cyan][2][/] Protein + Ligand")
+            self.console.print("      [dim]Protein-ligand complex simulation[/]")
+            self.console.print()
+        else:
+            print(BANNER)
+            print(f"\n{APP_DESCRIPTION} v{APP_VERSION}\n")
+            print("Select Simulation Type:")
+            print("  [1] Protein Only")
+            print("  [2] Protein + Ligand")
+            print()
+        
+        choice = self.prompt("Enter choice", choices=["1", "2"], default="1")
+        
+        if choice == "2":
+            return "protein_ligand"
+        return "protein_only"
+    
     def show_banner(self):
         """Display the application banner."""
         if RICH_AVAILABLE:
             banner_text = Text(BANNER, style="bold cyan")
-            mode_text = " [DRY-RUN MODE]" if self.dry_run else ""
+            mode_text = f" [{self.mode_name}]"
+            if self.dry_run:
+                mode_text += " [DRY-RUN]"
             self.console.print(Panel(
                 banner_text,
                 subtitle=f"{APP_DESCRIPTION} v{APP_VERSION}{mode_text}",
@@ -120,7 +186,7 @@ class GmxFlowApp:
             ))
         else:
             print(BANNER)
-            mode_text = " [DRY-RUN MODE]" if self.dry_run else ""
+            mode_text = f" [{self.mode_name}]" + (" [DRY-RUN]" if self.dry_run else "")
             print(f"  {APP_DESCRIPTION} v{APP_VERSION}{mode_text}")
             print("=" * 60)
     
@@ -131,7 +197,6 @@ class GmxFlowApp:
             table.add_column("Item", style="white")
             table.add_column("Status", style="white")
         
-        # GROMACS check
         gmx_ok, gmx_msg = check_gromacs_available()
         
         if RICH_AVAILABLE:
@@ -144,18 +209,22 @@ class GmxFlowApp:
             print(f"  GROMACS: [{symbol}] {gmx_msg}")
             print(f"  Working Dir: {self.working_dir}")
         
-        # Mandatory files check
-        found, missing = check_mandatory_files(MANDATORY_FILES, self.working_dir)
+        found, missing = check_mandatory_files(self.current_files, self.working_dir)
         
         if RICH_AVAILABLE:
             if missing:
-                file_status = f"[yellow]⚠ {len(found)}/{len(MANDATORY_FILES)} files found[/]"
+                file_status = f"[yellow]⚠ {len(found)}/{len(self.current_files)} files found[/]"
             else:
-                file_status = f"[green]✓ All {len(MANDATORY_FILES)} files found[/]"
+                file_status = f"[green]✓ All {len(self.current_files)} files found[/]"
             table.add_row("Input Files", file_status)
+            
+            # Show MD settings
+            md_ns = self.settings.get("md_length_ns", 1)
+            table.add_row("MD Length", f"[dim]{md_ns} ns ({get_md_steps(self.settings):,} steps)[/]")
+            
             self.console.print(Panel(table, title="System Status", border_style="dim"))
         else:
-            status = f"{len(found)}/{len(MANDATORY_FILES)} files found"
+            status = f"{len(found)}/{len(self.current_files)} files found"
             print(f"  Input Files: {status}")
             print()
     
@@ -177,20 +246,17 @@ class GmxFlowApp:
             print("Pipeline Steps:")
             print("-" * 60)
         
-        for step in PIPELINE_STEPS:
-            # Check step locking
+        for step in self.current_steps:
             can_run, missing_deps = check_step_dependencies(step.id, self.working_dir)
             done = is_step_complete(step.id, self.working_dir)
             
             if RICH_AVAILABLE:
-                # Lock status
                 if not can_run:
                     dep_names = [f"Step {d}" for d in missing_deps]
                     lock_text = f"[red]🔒 Need {', '.join(dep_names)}[/]"
                 else:
                     lock_text = "[green]✓ Ready[/]"
                 
-                # Done status from .done flag
                 if done:
                     status_text = f"[green]{STATUS_SYMBOLS['complete']} Complete[/]"
                 else:
@@ -208,7 +274,7 @@ class GmxFlowApp:
                 print(f"  [{step.id}] {step.name} - {lock} - {status}")
         
         if RICH_AVAILABLE:
-            self.console.print(Panel(table, title="Pipeline Steps", border_style="cyan"))
+            self.console.print(Panel(table, title=f"Pipeline Steps ({self.mode_name})", border_style="cyan"))
         else:
             print()
     
@@ -228,15 +294,15 @@ class GmxFlowApp:
                 "[cyan][Q][/] Quit"
             )
             actions.add_row(
-                "[cyan][F][/] File Check",
-                "[cyan][R][/] Reset All",
-                "[cyan][H][/] Help",
-                "[cyan][V][/] Visualization"
+                "[cyan][S][/] Settings",
+                "[cyan][M][/] Switch Mode",
+                "[cyan][G][/] Generate MDP",
+                "[cyan][R][/] Reset All"
             )
             self.console.print(Panel(actions, border_style="dim"))
         else:
             print("Actions: [1-9] Run Step | [A] Analysis | [P] Full Pipeline | [Q] Quit")
-            print("         [F] File Check | [R] Reset | [H] Help | [V] Visualization")
+            print("         [S] Settings | [M] Switch Mode | [G] Generate MDP | [R] Reset")
             print()
     
     def show_log_panel(self):
@@ -262,6 +328,80 @@ class GmxFlowApp:
         self.show_quick_actions()
         self.show_log_panel()
     
+    def show_settings_menu(self):
+        """Display and handle the settings menu."""
+        while True:
+            self.print_separator()
+            self.console.print("[bold cyan]Simulation Settings[/]\n")
+            
+            md_steps = get_md_steps(self.settings)
+            
+            self.console.print(f"  [1] MD Length:      [bold]{self.settings['md_length_ns']} ns[/] ({md_steps:,} steps)")
+            self.console.print(f"  [2] NVT Steps:      [bold]{self.settings['nvt_steps']:,}[/]")
+            self.console.print(f"  [3] NPT Steps:      [bold]{self.settings['npt_steps']:,}[/]")
+            self.console.print(f"  [4] Temperature:    [bold]{self.settings['temperature_k']} K[/]")
+            self.console.print(f"  [5] Timestep:       [bold]{self.settings['dt_ps']} ps[/]")
+            self.console.print()
+            self.console.print("  [G] Generate MDP Files")
+            self.console.print("  [R] Reset to Defaults")
+            self.console.print("  [B] Back to Main Menu")
+            
+            choice = self.prompt("\nSelect option", default="b").lower()
+            
+            if choice == 'b':
+                save_settings(self.settings, self.working_dir)
+                break
+            elif choice == '1':
+                val = self.prompt("MD Length (ns)", default=str(self.settings['md_length_ns']))
+                try:
+                    self.settings['md_length_ns'] = float(val)
+                    self.add_log(f"MD length set to {val} ns", "INFO")
+                except ValueError:
+                    self.add_log("Invalid value", "ERROR")
+            elif choice == '2':
+                val = self.prompt("NVT Steps", default=str(self.settings['nvt_steps']))
+                try:
+                    self.settings['nvt_steps'] = int(val)
+                except ValueError:
+                    self.add_log("Invalid value", "ERROR")
+            elif choice == '3':
+                val = self.prompt("NPT Steps", default=str(self.settings['npt_steps']))
+                try:
+                    self.settings['npt_steps'] = int(val)
+                except ValueError:
+                    self.add_log("Invalid value", "ERROR")
+            elif choice == '4':
+                val = self.prompt("Temperature (K)", default=str(self.settings['temperature_k']))
+                try:
+                    self.settings['temperature_k'] = float(val)
+                except ValueError:
+                    self.add_log("Invalid value", "ERROR")
+            elif choice == '5':
+                val = self.prompt("Timestep (ps)", default=str(self.settings['dt_ps']))
+                try:
+                    self.settings['dt_ps'] = float(val)
+                except ValueError:
+                    self.add_log("Invalid value", "ERROR")
+            elif choice == 'g':
+                self._generate_mdp_files()
+            elif choice == 'r':
+                self.settings = DEFAULT_SETTINGS.copy()
+                self.add_log("Settings reset to defaults", "INFO")
+    
+    def _generate_mdp_files(self):
+        """Generate all MDP files based on current settings."""
+        self.console.print("\n[cyan]Generating MDP files...[/]")
+        results = generate_all_mdp_files(self.settings, self.working_dir)
+        
+        for filename, success in results.items():
+            if success:
+                self.console.print(f"  [green]✓[/] {filename}")
+            else:
+                self.console.print(f"  [red]✗[/] {filename}")
+        
+        self.add_log("Generated MDP files", "INFO")
+        input("\n[Press Enter to continue...]")
+    
     def run_pipeline_step(self, step_id: int):
         """Execute a pipeline step with locking and resume detection."""
         step = self.pipeline.get_step(step_id)
@@ -269,10 +409,10 @@ class GmxFlowApp:
             self.add_log(f"Invalid step ID: {step_id}", "ERROR")
             return False
         
-        # === STEP LOCKING CHECK ===
+        # Check dependencies
         can_run, missing_deps = check_step_dependencies(step_id, self.working_dir)
         if not can_run:
-            dep_names = [f"Step {d} ({STEP_NAMES[d]})" for d in missing_deps]
+            dep_names = [f"Step {d} ({STEP_NAMES.get(d, 'Unknown')})" for d in missing_deps]
             self.console.print(f"[red]✗ BLOCKED: Step {step_id} requires completion of:[/]")
             for name in dep_names:
                 self.console.print(f"[red]  • {name}[/]")
@@ -280,7 +420,7 @@ class GmxFlowApp:
             input("\n[Press Enter to continue...]")
             return False
         
-        # === RESUME DETECTION ===
+        # Resume detection
         outputs_exist, existing_files = check_output_exists(step_id, self.working_dir)
         if outputs_exist:
             self.console.print(f"[yellow]⚠ Output files already exist: {', '.join(existing_files)}[/]")
@@ -288,7 +428,7 @@ class GmxFlowApp:
                 self.add_log(f"Step {step_id} cancelled - user declined overwrite", "INFO")
                 return False
         
-        # === DRY RUN MODE ===
+        # Dry run
         if self.dry_run:
             self.console.print(f"\n[bold yellow]DRY-RUN: Would execute Step {step_id}: {step.name}[/]")
             self.console.print(f"[dim]Command: {step.command}[/]")
@@ -298,35 +438,12 @@ class GmxFlowApp:
             input("\n[Press Enter to continue...]")
             return True
         
-        # Check prerequisites files
-        ready, missing = validate_step_ready(step_id, self.working_dir)
-        if missing:
-            self.console.print(f"[yellow]⚠ Missing input files: {', '.join(missing)}[/]")
-            if not self.confirm("Continue anyway?"):
-                return False
-        
-        # Show manual intervention warning
-        if step.manual_intervention:
-            if RICH_AVAILABLE:
-                self.console.print(Panel(
-                    f"[yellow]⚠ After this step, please manually edit:[/]\n"
-                    f"  File: [bold]{step.manual_intervention['file']}[/]\n"
-                    f"  Actions:\n" + "\n".join(f"    • {a}" for a in step.manual_intervention['actions']),
-                    title="Manual Intervention Required",
-                    border_style="yellow"
-                ))
-            else:
-                print(f"WARNING: After this step, edit {step.manual_intervention['file']}")
-            if not self.confirm("Continue?"):
-                return False
-        
         self.add_log(f"Starting step {step_id}: {step.name}")
         self.console.print(f"\n[bold cyan]>>> Executing Step {step_id}: {step.name}[/]")
         self.console.print(f"[dim]Command: {step.command}[/]\n")
         self.console.print("[yellow]" + "─" * 60 + "[/]\n")
         
-        # Execute
-        interactive = step.user_input_required or step.id == 6
+        interactive = step.user_input_required
         result = self.pipeline.execute_step(
             step_id,
             on_output=lambda msg: self.console.print(msg),
@@ -336,15 +453,14 @@ class GmxFlowApp:
         self.console.print("\n[yellow]" + "─" * 60 + "[/]")
         
         if result.status == StepStatus.COMPLETE:
-            # === MARK STEP COMPLETE ===
             mark_step_complete(step_id, self.working_dir)
             self.add_log(f"Step {step_id} completed successfully", "INFO")
             self.console.print(f"\n[green]✓ Step {step_id} completed successfully![/]")
             if step.produces:
                 self.console.print(f"[dim]  Produced: {', '.join(step.produces)}[/]")
             
-            # === AUTO-PATCH TOPOLOGY AFTER STEP 4 ===
-            if step_id == 4:
+            # Auto-patch topology after Step 4 (ligand mode only)
+            if step_id == 4 and self.mode == "protein_ligand":
                 self.console.print("\n[cyan]>>> Auto-patching topol.top with ligand...[/]")
                 success, msg = patch_topology_for_ligand("topol.top", "ligand.itp", directory=self.working_dir)
                 if success:
@@ -352,7 +468,6 @@ class GmxFlowApp:
                     self.add_log(msg, "INFO")
                 else:
                     self.console.print(f"[red]✗ {msg}[/]")
-                    self.console.print("[yellow]Please manually edit topol.top to add ligand.itp[/]")
                     self.add_log(msg, "WARNING")
             
             input("\n[Press Enter to continue...]")
@@ -368,12 +483,12 @@ class GmxFlowApp:
     def run_full_pipeline(self):
         """Run all pipeline steps in sequence."""
         self.print_separator()
-        self.console.print(f"[bold cyan]>>> Full Pipeline Execution[/]")
+        self.console.print(f"[bold cyan]>>> Full Pipeline Execution ({self.mode_name})[/]")
         
         if self.dry_run:
             self.console.print("[bold yellow]DRY-RUN MODE: Showing all commands without execution[/]\n")
         
-        for step in PIPELINE_STEPS:
+        for step in self.current_steps:
             self.console.print(f"\n[bold]Step {step.id}: {step.name}[/]")
             
             if self.dry_run:
@@ -382,12 +497,10 @@ class GmxFlowApp:
                     self.console.print(f"[dim]  Produces: {', '.join(step.produces)}[/]")
                 continue
             
-            # Check if already complete
             if is_step_complete(step.id, self.working_dir):
                 self.console.print(f"[green]  ✓ Already complete, skipping[/]")
                 continue
             
-            # Run the step
             success = self.run_pipeline_step(step.id)
             if not success:
                 self.console.print(f"\n[red]Pipeline halted at step {step.id}[/]")
@@ -403,30 +516,31 @@ class GmxFlowApp:
         self.print_separator()
         self.console.print("[bold cyan]Analysis Tools[/]\n")
         
-        # Check if MD complete
         if not is_step_complete(9, self.working_dir):
             self.console.print("[yellow]⚠ Production MD (Step 9) not complete.[/]")
             self.console.print("[dim]Analysis may fail without MD output files.[/]\n")
         
-        for i, step in enumerate(ANALYSIS_STEPS, 1):
+        for i, step in enumerate(self.current_analysis, 1):
             self.console.print(f"  [{i}] {step.name}")
             self.console.print(f"      [dim]→ {step.output_file}[/]")
         
         self.console.print(f"\n  [B] Back to main menu")
         
-        choice = self.prompt("\nSelect analysis", choices=["1", "2", "3", "4", "b", "B"], default="b")
+        choices = [str(i) for i in range(1, len(self.current_analysis) + 1)] + ["b", "B"]
+        choice = self.prompt("\nSelect analysis", choices=choices, default="b")
         
         if choice.lower() == "b":
             return
         
+        step_idx = int(choice) - 1
+        step = self.current_analysis[step_idx]
+        
         if self.dry_run:
-            step = ANALYSIS_STEPS[int(choice) - 1]
             self.console.print(f"\n[bold yellow]DRY-RUN: Would run {step.name}[/]")
             self.console.print(f"[dim]Command: {step.command}[/]")
             input("\n[Press Enter to continue...]")
             return
         
-        step_idx = int(choice) - 1
         result = self.analysis.run_analysis(step_idx, on_output=lambda msg: self.console.print(msg), interactive=True)
         
         if result.success:
@@ -438,95 +552,25 @@ class GmxFlowApp:
         
         input("\n[Press Enter to continue...]")
     
-    def show_visualization_menu(self):
-        """Display and handle the visualization menu."""
-        self.print_separator()
-        self.console.print("[bold cyan]Visualization Tools[/]\n")
+    def switch_mode(self):
+        """Switch between protein-only and protein-ligand modes."""
+        self.console.print("\n[bold]Switch Simulation Mode[/]\n")
+        self.console.print(f"  Current: [cyan]{self.mode_name}[/]")
         
-        options = self.visualization.get_visualization_options()
-        
-        vmd = options["vmd"]
-        xmg = options["xmgrace"]
-        
-        if vmd["available"] and vmd["has_files"]:
-            self.console.print("  [1] Launch VMD (trajectory viewer)")
+        if self.mode == "protein_only":
+            new_mode = "protein_ligand"
+            new_name = "Protein + Ligand"
         else:
-            self.console.print(f"  [dim][1] VMD - {'files not found' if vmd['available'] else vmd['message']}[/]")
+            new_mode = "protein_only"
+            new_name = "Protein Only"
         
-        if xmg["available"]:
-            self.console.print("  [2] Launch xmgrace (plot viewer)")
-        else:
-            self.console.print(f"  [dim][2] xmgrace - {xmg['message']}[/]")
-        
-        self.console.print("\n  [B] Back")
-        
-        choice = self.prompt("Select option", choices=["1", "2", "b", "B"], default="b")
-        
-        if choice.lower() == "b":
-            return
-        
-        if choice == "1":
-            success, msg = self.visualization.launch_vmd()
-            self.console.print(f"[green]✓ {msg}[/]" if success else f"[red]✗ {msg}[/]")
-        elif choice == "2":
-            xvg_files = xmg.get("xvg_files", [])
-            if xvg_files:
-                for i, f in enumerate(xvg_files, 1):
-                    self.console.print(f"  [{i}] {f}")
-                fc = self.prompt("Select file", choices=[str(i) for i in range(1, len(xvg_files)+1)])
-                success, msg = self.visualization.launch_xmgrace(xvg_files[int(fc) - 1])
-                self.console.print(f"[green]✓ {msg}[/]" if success else f"[red]✗ {msg}[/]")
-        
-        input("\n[Press Enter to continue...]")
-    
-    def show_file_check(self):
-        """Display detailed file check."""
-        self.print_separator()
-        self.console.print("[bold cyan]Input File Check[/]\n")
-        
-        found, missing = check_mandatory_files(MANDATORY_FILES, self.working_dir)
-        
-        for f in found:
-            self.console.print(f"  [green]✓[/] {f}")
-        for f in missing:
-            self.console.print(f"  [red]✗[/] {f}")
-        
-        self.console.print(f"\n[dim]Directory: {self.working_dir}[/]")
-        input("\n[Press Enter to continue...]")
-    
-    def show_help(self):
-        """Display help information."""
-        self.print_separator()
-        
-        help_text = """
-# gmxFlow Help
-
-## Step Locking
-Steps must be completed in order. Each step creates a .done flag.
-You cannot run Step 5 until Steps 1-4 are complete.
-
-## Interactive Steps
-- Step 1 (pdb2gmx): Select force field (use 15 for OPLS-AA)
-- Step 6 (make_ndx): Create custom index groups
-
-## Force Field Recommendation
-For workshops, use OPLS-AA (option 15 in pdb2gmx).
-
-## Manual Steps
-After Step 4, edit topol.top to:
-1. Add: #include "ligand.itp"
-2. Add ligand to [ molecules ] section
-
-## Keys
-[1-9] Run step | [P] Full pipeline | [A] Analysis | [V] Visualization
-[F] File check | [R] Reset all flags | [H] Help | [Q] Quit
-        """
-        
-        if RICH_AVAILABLE:
-            self.console.print(Panel(Markdown(help_text), title="Help", border_style="cyan"))
-        else:
-            print(help_text)
-        input("\n[Press Enter to continue...]")
+        if self.confirm(f"Switch to {new_name}?"):
+            self.mode = new_mode
+            self._update_mode_config()
+            self.settings["simulation_mode"] = new_mode
+            save_settings(self.settings, self.working_dir)
+            self.pipeline = PipelineExecutor(self.working_dir, self.current_steps)
+            self.add_log(f"Switched to {new_name} mode", "INFO")
     
     def run(self):
         """Main application loop."""
@@ -555,20 +599,20 @@ After Step 4, edit topol.top to:
             elif choice == 'a':
                 self.show_analysis_menu()
             
-            elif choice == 'v':
-                self.show_visualization_menu()
+            elif choice == 's':
+                self.show_settings_menu()
             
-            elif choice == 'f':
-                self.show_file_check()
+            elif choice == 'm':
+                self.switch_mode()
+            
+            elif choice == 'g':
+                self._generate_mdp_files()
             
             elif choice == 'r':
                 if self.confirm("Reset all step completion flags?"):
                     clear_all_flags(self.working_dir)
                     self.pipeline.reset_all()
                     self.add_log("All step flags cleared", "INFO")
-            
-            elif choice == 'h':
-                self.show_help()
             
             else:
                 self.add_log(f"Unknown command: {choice}", "WARNING")
@@ -580,12 +624,28 @@ def main():
         description=f"{APP_NAME} - {APP_DESCRIPTION}",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument('--version', '-V', action='version', version=f'{APP_NAME} {APP_VERSION}')
+    parser.add_argument('--version', '-V', action='version', version=f'{APP_NAME} 2.0.0')
     parser.add_argument('--dry-run', '-n', action='store_true', help='Show commands without executing them')
+    parser.add_argument('--protein', action='store_true', help='Start in Protein-Only mode')
+    parser.add_argument('--ligand', action='store_true', help='Start in Protein+Ligand mode')
     
     args = parser.parse_args()
     
-    app = GmxFlowApp(dry_run=args.dry_run)
+    # Determine mode
+    mode = None
+    if args.protein:
+        mode = "protein_only"
+    elif args.ligand:
+        mode = "protein_ligand"
+    
+    app = GmxFlowApp(dry_run=args.dry_run, mode=mode)
+    
+    # If no mode specified via args, show selection
+    if mode is None:
+        selected_mode = app.show_mode_selection()
+        app.mode = selected_mode
+        app._update_mode_config()
+        app.pipeline = PipelineExecutor(app.working_dir, app.current_steps)
     
     try:
         app.run()

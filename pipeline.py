@@ -36,10 +36,11 @@ class StepResult:
 class PipelineExecutor:
     """Executes pipeline steps and manages state."""
     
-    def __init__(self, working_dir: str = "."):
+    def __init__(self, working_dir: str = ".", steps: list = None):
         self.working_dir = working_dir
+        self.steps = steps if steps is not None else PIPELINE_STEPS
         self.step_status: dict[int, StepStatus] = {
-            step.id: StepStatus.PENDING for step in PIPELINE_STEPS
+            step.id: StepStatus.PENDING for step in self.steps
         }
         self.current_process: Optional[subprocess.Popen] = None
         self._output_queue: queue.Queue = queue.Queue()
@@ -47,7 +48,7 @@ class PipelineExecutor:
     
     def get_step(self, step_id: int) -> Optional[PipelineStep]:
         """Get pipeline step by ID."""
-        for step in PIPELINE_STEPS:
+        for step in self.steps:
             if step.id == step_id:
                 return step
         return None
@@ -219,5 +220,5 @@ class PipelineExecutor:
     
     def reset_all(self):
         """Reset all step statuses to pending."""
-        for step in PIPELINE_STEPS:
+        for step in self.steps:
             self.step_status[step.id] = StepStatus.PENDING
