@@ -50,6 +50,7 @@ from settings import (
 from pipeline import PipelineExecutor, StepStatus
 from analysis import AnalysisRunner
 from visualization import VisualizationManager
+from license_check import check_license
 
 
 class PlainConsole:
@@ -701,6 +702,11 @@ def main():
         mode = "protein_only"
     elif args.ligand:
         mode = "protein_ligand"
+    
+    # License check
+    if not check_license():
+        print("\nLicense required. Exiting.")
+        sys.exit(1)
     
     app = GmxFlowApp(dry_run=args.dry_run, mode=mode)
     
