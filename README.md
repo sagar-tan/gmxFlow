@@ -2,56 +2,30 @@
 
 Terminal UI for GROMACS molecular dynamics simulation pipelines.
 
-**Version: 2026.0.1**
+**Version: 2026.0.1** | **Workshop Exclusive**
 
 ## Installation
 
-### Option 1: pipx (Recommended for Ubuntu 22.04+)
 ```bash
-# Install pipx (one-time)
-sudo apt install pipx
-pipx ensurepath
-source ~/.bashrc
-
-# Install gmxFlow
-pipx install git+https://github.com/sagar-tan/gmxFlow.git
+curl -sSL https://bit.ly/gmxFlow-1 | sudo bash
 ```
 
-### Option 2: pip with --break-system-packages
-```bash
-pip3 install --user --break-system-packages git+https://github.com/sagar-tan/gmxFlow.git
-```
-
-### Option 3: Portable (no install)
-```bash
-git clone https://github.com/sagar-tan/gmxFlow.git
-cd gmxFlow
-python3 gmxflow.py
-```
+> License key required. Workshop participants receive keys during the session.
 
 ## Update
+
 ```bash
-pipx upgrade gmxflow
-# or
-pipx install --force git+https://github.com/sagar-tan/gmxFlow.git
+sudo gmflo-update
 ```
 
 ## Usage
 
 ```bash
-gmflo              # Run gmxFlow
+gmflo              # Run (mode selection)
 gmflo --protein    # Protein-only mode
 gmflo --ligand     # Protein+Ligand mode
-gmflo --dry-run    # Preview commands
 gmflo --version    # Show version
 ```
-
-## Simulation Modes
-
-| Mode | Input Files |
-|------|-------------|
-| Protein Only | `Protein.pdb` |
-| Protein+Ligand | `protein_only.pdb`, `ligand.gro`, `ligand.itp` |
 
 ## Keyboard Shortcuts
 
@@ -64,8 +38,12 @@ gmflo --version    # Show version
 | `M` | Switch mode |
 | `Q` | Quit |
 
-## Uninstall
+## Requirements
 
-```bash
-pipx uninstall gmxflow
-```
+- Python 3.8+
+- GROMACS (`gmx` in PATH)
+- License key (workshop exclusive)
+
+## License
+
+Proprietary - Workshop participants only. See LICENSE file.
