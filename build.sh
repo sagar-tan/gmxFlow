@@ -37,14 +37,8 @@ pyinstaller \
     --add-data "visualization.py:." \
     --add-data "settings.py:." \
     --add-data "license_check.py:." \
-    --hidden-import=rich \
-    --hidden-import=rich.console \
-    --hidden-import=rich.panel \
-    --hidden-import=rich.table \
-    --hidden-import=rich.text \
-    --hidden-import=rich.prompt \
-    --hidden-import=rich.markdown \
-    --hidden-import=rich.box \
+    --add-data "license_check.py:." \
+    --collect-all rich \
     gmxflow.py
 
 # Check output
