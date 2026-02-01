@@ -1,77 +1,85 @@
 # gmxFlow Complete Installation Guide
 
-This guide covers the installation process for **gmxFlow** on a completely fresh Linux system (e.g., Ubuntu, Debian, Kali, Mint, or WSL).
+This guide covers the full installation process on a **fresh Ubuntu/Linux system**.
 
-## 1. Prerequisites (Prepare your System)
+## Prerequisites
 
-Before installing gmxFlow, ensure your system has the necessary core tools and GROMACS installed.
-
-Open your terminal and run the following commands:
-
-### Step A: Update System
-```bash
-sudo apt update && sudo apt upgrade -y
-```
-
-### Step B: Install GROMACS & Python
-gmxFlow requires GROMACS to run simulations and Python to run the interface.
+Your GROMACS installation already provides most dependencies. Verify you have:
 
 ```bash
-# Install GROMACS, Python, and basic tools
-sudo apt install -y gromacs python3 python3-pip curl git
+# Check GCC (required: 11+)
+gcc --version
+
+# Check Python (required: 3.8+)
+python3 --version
 ```
 
-*Verify GROMACS is installed:*
+If you followed the GROMACS installation guide (with GCC 11 and CMake), you're ready.
+
+---
+
+## 1. Install GROMACS (If Not Done)
+
+Follow your workshop GROMACS installation guide, then verify:
 ```bash
 gmx --version
 ```
-*(You should see GROMACS version information. If not, try `sudo apt install gromacs-gl` or check GROMACS documentation).*
 
 ---
 
 ## 2. Install gmxFlow
 
-Now that dependencies are ready, install gmxFlow using the one-line installer.
-
-### Run the Installer
+**One-line installer:**
 ```bash
 curl -sSL https://bit.ly/gmxFlow-1 | sudo bash
 ```
 
-This command will:
-1. Detect automatically if a binary release is available.
-2. Download and install `gmflo` to your system path.
-3. Set up the `gmflo-update` command.
+This downloads and installs `gmflo` to your system.
 
 ---
 
-## 3. Activation (First Run)
+## 3. First Run (License Activation)
 
-The first time you run gmxFlow, you will need your **Workshop License Key**.
+```bash
+gmflo
+```
 
-1. **Start the tool:**
-   ```bash
-   gmflo
-   ```
-
-2. **Enter License Key:**
-   When prompted, enter the key provided during your workshop (e.g., `GMX-WS26-XXXX`).
-   
-   > *Note: This key grants you lifetime access on this machine.*
+Enter your workshop license key when prompted. 
+*(Key provided during the workshop session)*
 
 ---
 
 ## 4. Usage
 
-Successfully installed! You can now run simulations.
+| Command | Description |
+|---------|-------------|
+| `gmflo` | Interactive mode (choose simulation type) |
+| `gmflo --protein` | Direct protein-only mode |
+| `gmflo --ligand` | Direct protein+ligand mode |
+| `gmflo --version` | Show version |
 
-**Basic Commands:**
-- `gmflo` : Start the interactive menu (default)
-- `gmflo --protein` : Start directly in Protein-Only mode
-- `gmflo --version` : Check installed version
+---
 
-**Updating:**
-To get the latest version (including bug fixes):
+## 5. Update
+
 ```bash
 sudo gmflo-update
+```
+
+---
+
+## 6. Uninstall
+
+```bash
+sudo rm -rf /usr/local/bin/gmflo /usr/local/bin/gmflo-update /usr/local/gmxflow
+rm -f ~/.gmxflow_license ~/.gmxflow_settings.json
+```
+
+---
+
+## Optional: Enhanced Output
+
+For colored terminal output:
+```bash
+pip3 install rich --break-system-packages
 ```
