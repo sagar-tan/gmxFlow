@@ -69,6 +69,12 @@ gmflo --version    # Show version
 - GROMACS (`gmx` in PATH)
 - Optional: `rich` (colors), VMD, xmgrace
 
+## Update
+
+```bash
+sudo gmflo-update
+```
+
 ## Uninstall
 
 ```bash

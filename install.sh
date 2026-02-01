@@ -51,6 +51,24 @@ python3 /usr/local/gmxflow/gmxflow.py "$@"
 EOF
 chmod +x "$BIN_LINK"
 
+# Create gmflo-update command
+cat > "/usr/local/bin/gmflo-update" << 'UPDATEEOF'
+#!/bin/bash
+# gmxFlow Updater
+set -e
+REPO_URL="https://github.com/USER/gmxFlow.git"
+echo "Updating gmxFlow..."
+rm -rf /tmp/gmxflow-update
+git clone --depth 1 "$REPO_URL" /tmp/gmxflow-update 2>/dev/null || {
+    mkdir -p /tmp/gmxflow-update
+    wget -qO- https://github.com/USER/gmxFlow/archive/main.tar.gz | tar xz -C /tmp/gmxflow-update --strip-components=1
+}
+sudo cp /tmp/gmxflow-update/*.py /usr/local/gmxflow/
+rm -rf /tmp/gmxflow-update
+echo "✓ Updated! Run: gmflo --version"
+UPDATEEOF
+chmod +x /usr/local/bin/gmflo-update
+
 # Cleanup
 rm -rf /tmp/gmxflow-install
 
