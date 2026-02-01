@@ -552,6 +552,33 @@ class GmxFlowApp:
         
         if self.dry_run:
             self.console.print("[bold yellow]DRY-RUN MODE: Showing all commands without execution[/]\n")
+        else:
+            # Collect required inputs upfront
+            self.console.print("\n[bold]Pre-Run Configuration[/]")
+            self.console.print("[dim]Answer these questions now, then the pipeline runs hands-off.[/]\n")
+            
+            # Force field selection
+            self.console.print("[cyan]Available Force Fields:[/]")
+            self.console.print("  1: AMBER03  6: AMBER99SB  15: OPLS-AA/L (recommended)")
+            self.console.print("  2: AMBER94  7: AMBER99SB-ILDN")
+            self.console.print("  3: AMBER96  8: AMBERGS")
+            self.console.print("  4: AMBER99  14: GROMOS96 54a7")
+            ff_choice = self.prompt("\nForce field [15=OPLS-AA recommended]", default="15")
+            
+            if self.mode == "protein_only":
+                # Protein-only mode needs ion group (usually SOL = 13)
+                ion_group = self.prompt("Ion replacement group [13=SOL]", default="13")
+            else:
+                ion_group = None
+            
+            self.console.print("\n[green]✓ Configuration complete. Starting pipeline...[/]")
+            self.console.print("[dim]No further input required until completion.[/]\n")
+            
+            # Store inputs for command substitution
+            self.pipeline_inputs = {
+                'force_field': ff_choice,
+                'ion_group': ion_group
+            }
         
         for step in self.current_steps:
             self.console.print(f"\n[bold]Step {step.id}: {step.name}[/]")
@@ -566,7 +593,8 @@ class GmxFlowApp:
                 self.console.print(f"[green]  ✓ Already complete, skipping[/]")
                 continue
             
-            success = self.run_pipeline_step(step.id)
+            # Run step with pre-collected inputs
+            success = self._run_pipeline_step_auto(step)
             if not success:
                 self.console.print(f"\n[red]Pipeline halted at step {step.id}[/]")
                 break
@@ -575,6 +603,60 @@ class GmxFlowApp:
             self.console.print("\n[bold yellow]DRY-RUN complete. No commands were executed.[/]")
         
         input("\n[Press Enter to continue...]")
+    
+    def _run_pipeline_step_auto(self, step):
+        """Run a pipeline step with pre-collected inputs (no manual intervention)."""
+        import re
+        
+        # Get the command and substitute inputs
+        command = step.command
+        inputs = getattr(self, 'pipeline_inputs', {})
+        
+        # Substitute force field input for pdb2gmx commands
+        if 'pdb2gmx' in command and "echo" not in command:
+            ff = inputs.get('force_field', '15')
+            command = f"echo '{ff}' | {command}"
+        
+        # Substitute ion group for genion commands (protein-only mode)
+        if 'genion' in command and "echo" not in command and inputs.get('ion_group'):
+            ion = inputs['ion_group']
+            # Insert echo before genion in the chained command
+            command = command.replace('gmx genion', f"echo '{ion}' | gmx genion")
+        
+        self.console.print(f"[dim]>>> {command}[/]")
+        self.console.print("[yellow]" + "─" * 60 + "[/]")
+        
+        # Execute command
+        result = self.pipeline.execute_step(
+            step.id,
+            on_output=lambda msg: self.console.print(msg),
+            interactive=False,
+            command_override=command
+        )
+        
+        self.console.print("\n[yellow]" + "─" * 60 + "[/]")
+        
+        if result.status == StepStatus.COMPLETE:
+            mark_step_complete(step.id, self.working_dir)
+            self.add_log(f"Step {step.id} completed successfully", "INFO")
+            self.console.print(f"\n[green]✓ Step {step.id} completed successfully![/]")
+            
+            # Auto-patch topology after Step 4 (ligand mode only)
+            if step.id == 4 and self.mode == "protein_ligand":
+                self.console.print("\n[cyan]>>> Auto-patching topol.top with ligand...[/]")
+                success, msg = patch_topology_for_ligand("topol.top", "ligand.itp", directory=self.working_dir)
+                if success:
+                    self.console.print(f"[green]✓ {msg}[/]")
+                else:
+                    self.console.print(f"[red]✗ {msg}[/]")
+            
+            return True
+        else:
+            self.add_log(f"Step {step.id} failed", "ERROR")
+            self.console.print(f"\n[red]✗ Step {step.id} failed![/]")
+            if result.error_message:
+                self.console.print(f"[red]  Error: {result.error_message}[/]")
+            return False
     
     def show_analysis_menu(self):
         """Display and handle the analysis menu."""

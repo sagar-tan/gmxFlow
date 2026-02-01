@@ -65,7 +65,8 @@ class PipelineExecutor:
         self,
         step_id: int,
         on_output: Optional[Callable[[str], None]] = None,
-        interactive: bool = False
+        interactive: bool = False,
+        command_override: Optional[str] = None
     ) -> StepResult:
         """
         Execute a pipeline step.
@@ -74,6 +75,7 @@ class PipelineExecutor:
             step_id: ID of the step to execute
             on_output: Callback function for real-time output
             interactive: If True, allow user input (for steps like pdb2gmx)
+            command_override: If provided, use this command instead of step's default
         
         Returns:
             StepResult with execution details
@@ -89,20 +91,23 @@ class PipelineExecutor:
                 error_message=f"Invalid step ID: {step_id}"
             )
         
+        # Use override command if provided, otherwise use step's command
+        command = command_override if command_override else step.command
+        
         self.set_status(step_id, StepStatus.RUNNING)
         
         if on_output:
             on_output(f">>> Executing Step {step_id}: {step.name}")
-            on_output(f">>> Command: {step.command}")
+            on_output(f">>> Command: {command}")
             on_output("-" * 60)
         
         try:
             if interactive:
                 # Interactive mode - user can provide input
-                result = self._run_interactive(step.command, on_output)
+                result = self._run_interactive(command, on_output)
             else:
                 # Non-interactive mode - capture all output
-                result = self._run_captured(step.command, on_output)
+                result = self._run_captured(command, on_output)
             
             if result.return_code == 0:
                 self.set_status(step_id, StepStatus.COMPLETE)
