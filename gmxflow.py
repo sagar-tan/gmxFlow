@@ -578,44 +578,82 @@ class GmxFlowApp:
     
     def show_analysis_menu(self):
         """Display and handle the analysis menu."""
-        self.print_separator()
-        self.console.print("[bold cyan]Analysis Tools[/]\n")
+        while True:
+            self.print_separator()
+            self.console.print("[bold cyan]Analysis Tools[/]\n")
+            
+            if not is_step_complete(9, self.working_dir):
+                self.console.print("[yellow]⚠ Production MD (Step 9) not complete.[/]")
+                self.console.print("[dim]Analysis may fail without MD output files.[/]\n")
+            
+            for i, step in enumerate(self.current_analysis, 1):
+                self.console.print(f"  [{i}] {step.name}")
+                self.console.print(f"      [dim]→ {step.output_file}[/]")
+            
+            self.console.print(f"\n  [V] Launch VMD (Trajectory Viewer)")
+            self.console.print(f"  [B] Back to main menu")
+            
+            choices = [str(i) for i in range(1, len(self.current_analysis) + 1)] + ["v", "V", "b", "B"]
+            choice = self.prompt("\nSelect analysis", choices=choices, default="b")
+            
+            if choice.lower() == "b":
+                return
+            
+            if choice.lower() == "v":
+                self._launch_vmd()
+                continue
+            
+            step_idx = int(choice) - 1
+            step = self.current_analysis[step_idx]
+            
+            if self.dry_run:
+                self.console.print(f"\n[bold yellow]DRY-RUN: Would run {step.name}[/]")
+                self.console.print(f"[dim]Command: {step.command}[/]")
+                input("\n[Press Enter to continue...]")
+                continue
+            
+            result = self.analysis.run_analysis(step_idx, on_output=lambda msg: self.console.print(msg), interactive=True)
+            
+            if result.success:
+                self.add_log(f"Analysis '{result.name}' completed", "INFO")
+                self.console.print(f"\n[green]✓ {result.name} completed![/]")
+            else:
+                self.add_log(f"Analysis '{result.name}' failed", "ERROR")
+                self.console.print(f"\n[red]✗ {result.name} failed![/]")
+            
+            input("\n[Press Enter to continue...]")
+    
+    def _launch_vmd(self):
+        """Launch VMD for trajectory visualization."""
+        import os
+        md_gro = os.path.join(self.working_dir, "md.gro")
+        md_fit = os.path.join(self.working_dir, "md_fit.xtc")
+        md_xtc = os.path.join(self.working_dir, "md.xtc")
         
-        if not is_step_complete(9, self.working_dir):
-            self.console.print("[yellow]⚠ Production MD (Step 9) not complete.[/]")
-            self.console.print("[dim]Analysis may fail without MD output files.[/]\n")
+        # Prefer md_fit.xtc if available, otherwise use md.xtc
+        traj_file = md_fit if os.path.exists(md_fit) else md_xtc
+        traj_name = "md_fit.xtc" if os.path.exists(md_fit) else "md.xtc"
         
-        for i, step in enumerate(self.current_analysis, 1):
-            self.console.print(f"  [{i}] {step.name}")
-            self.console.print(f"      [dim]→ {step.output_file}[/]")
-        
-        self.console.print(f"\n  [B] Back to main menu")
-        
-        choices = [str(i) for i in range(1, len(self.current_analysis) + 1)] + ["b", "B"]
-        choice = self.prompt("\nSelect analysis", choices=choices, default="b")
-        
-        if choice.lower() == "b":
-            return
-        
-        step_idx = int(choice) - 1
-        step = self.current_analysis[step_idx]
-        
-        if self.dry_run:
-            self.console.print(f"\n[bold yellow]DRY-RUN: Would run {step.name}[/]")
-            self.console.print(f"[dim]Command: {step.command}[/]")
+        if not os.path.exists(md_gro):
+            self.console.print("[red]✗ md.gro not found. Run production MD first.[/]")
             input("\n[Press Enter to continue...]")
             return
         
-        result = self.analysis.run_analysis(step_idx, on_output=lambda msg: self.console.print(msg), interactive=True)
+        if not os.path.exists(traj_file):
+            self.console.print("[red]✗ No trajectory file found (md_fit.xtc or md.xtc)[/]")
+            input("\n[Press Enter to continue...]")
+            return
         
-        if result.success:
-            self.add_log(f"Analysis '{result.name}' completed", "INFO")
-            self.console.print(f"\n[green]✓ {result.name} completed![/]")
+        success, msg = self.visualization.launch_vmd("md.gro", traj_name)
+        if success:
+            self.console.print(f"[green]✓ {msg}[/]")
+            self.add_log("Launched VMD", "INFO")
         else:
-            self.add_log(f"Analysis '{result.name}' failed", "ERROR")
-            self.console.print(f"\n[red]✗ {result.name} failed![/]")
+            self.console.print(f"[red]✗ {msg}[/]")
+            self.console.print("[dim]Install VMD: https://www.ks.uiuc.edu/Research/vmd/[/]")
         
         input("\n[Press Enter to continue...]")
+    
     
     def show_visualization_menu(self):
         """Display and handle the visualization menu."""
