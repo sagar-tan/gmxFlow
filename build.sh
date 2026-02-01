@@ -21,7 +21,7 @@ source build_venv/bin/activate
 
 # Install PyInstaller
 echo "Installing dependencies..."
-pip install pyinstaller rich pyyaml
+pip install pyinstaller "rich==13.7.1" pyyaml
 
 # Create single file binary
 echo "Building binary..."
@@ -36,7 +36,6 @@ pyinstaller \
     --add-data "analysis.py:." \
     --add-data "visualization.py:." \
     --add-data "settings.py:." \
-    --add-data "license_check.py:." \
     --add-data "license_check.py:." \
     --collect-all rich \
     gmxflow.py
