@@ -1,0 +1,7 @@
+# gmxFlow Dependencies
+
+# TUI Framework
+rich>=13.0.0
+
+# Windows curses support (optional, for Windows systems)
+# windows-curses>=2.3.0  # Uncomment on Windows if using curses
