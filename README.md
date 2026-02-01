@@ -6,20 +6,20 @@ Terminal UI for GROMACS molecular dynamics simulation pipelines.
 
 ## Installation
 
-### Option 1: pip install (Recommended - always gets latest)
+### Option 1: pipx (Recommended for Ubuntu 22.04+)
 ```bash
-pip3 install --user git+https://github.com/sagar-tan/gmxFlow.git
-
-# Add to PATH if needed
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+# Install pipx (one-time)
+sudo apt install pipx
+pipx ensurepath
 source ~/.bashrc
+
+# Install gmxFlow
+pipx install git+https://github.com/sagar-tan/gmxFlow.git
 ```
 
-### Option 2: Clone and install
+### Option 2: pip with --break-system-packages
 ```bash
-git clone https://github.com/sagar-tan/gmxFlow.git
-cd gmxFlow
-pip3 install --user .
+pip3 install --user --break-system-packages git+https://github.com/sagar-tan/gmxFlow.git
 ```
 
 ### Option 3: Portable (no install)
@@ -31,13 +31,15 @@ python3 gmxflow.py
 
 ## Update
 ```bash
-pip3 install --user --upgrade git+https://github.com/sagar-tan/gmxFlow.git
+pipx upgrade gmxflow
+# or
+pipx install --force git+https://github.com/sagar-tan/gmxFlow.git
 ```
 
 ## Usage
 
 ```bash
-gmflo              # Run gmxFlow (mode selection)
+gmflo              # Run gmxFlow
 gmflo --protein    # Protein-only mode
 gmflo --ligand     # Protein+Ligand mode
 gmflo --dry-run    # Preview commands
@@ -46,10 +48,10 @@ gmflo --version    # Show version
 
 ## Simulation Modes
 
-| Mode | Input Files | Steps |
-|------|-------------|-------|
-| Protein Only | `Protein.pdb` | 9 (with ion neutralization) |
-| Protein+Ligand | `protein_only.pdb`, `ligand.gro`, `ligand.itp` | 9 (auto-patches topology) |
+| Mode | Input Files |
+|------|-------------|
+| Protein Only | `Protein.pdb` |
+| Protein+Ligand | `protein_only.pdb`, `ligand.gro`, `ligand.itp` |
 
 ## Keyboard Shortcuts
 
@@ -58,27 +60,12 @@ gmflo --version    # Show version
 | `1-9` | Run step |
 | `P` | Full pipeline |
 | `S` | Settings |
-| `G` | Generate MDP |
 | `A` | Analysis |
 | `M` | Switch mode |
-| `R` | Reset flags |
 | `Q` | Quit |
-
-## Post-Step Visualizations
-
-- **After EM**: potential.xvg
-- **After NVT**: temperature.xvg  
-- **After NPT**: pressure.xvg, density.xvg
-- **After MD**: Launch VMD
-
-## Dependencies
-
-- Python 3.8+
-- GROMACS (`gmx` in PATH)
-- Optional: `rich` (colors), VMD, xmgrace
 
 ## Uninstall
 
 ```bash
-pip3 uninstall gmxflow
+pipx uninstall gmxflow
 ```
