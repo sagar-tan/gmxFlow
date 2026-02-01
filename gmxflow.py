@@ -688,7 +688,7 @@ def main():
         description=f"{APP_NAME} - {APP_DESCRIPTION}",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument('--version', '-V', action='version', version=f'{APP_NAME} 2.0.0')
+    parser.add_argument('--version', '-V', action='version', version=f'{APP_NAME} {APP_VERSION}')
     parser.add_argument('--dry-run', '-n', action='store_true', help='Show commands without executing them')
     parser.add_argument('--protein', action='store_true', help='Start in Protein-Only mode')
     parser.add_argument('--ligand', action='store_true', help='Start in Protein+Ligand mode')
