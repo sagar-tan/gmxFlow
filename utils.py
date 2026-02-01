@@ -166,3 +166,129 @@ def validate_step_ready(step_id: int, directory: str = ".") -> Tuple[bool, List[
     prereqs = get_step_prerequisites(step_id)
     _, missing = check_mandatory_files(prereqs, directory)
     return len(missing) == 0, missing
+
+
+# === Step Locking System ===
+
+STEP_DEPENDENCIES = {
+    1: [],          # pdb2gmx - no deps
+    2: [1],         # insert-molecules needs pdb2gmx
+    3: [2],         # editconf needs insert-molecules
+    4: [3],         # solvate needs editconf
+    5: [4],         # EM needs solvate
+    6: [5],         # make_ndx needs EM
+    7: [6],         # NVT needs make_ndx
+    8: [7],         # NPT needs NVT
+    9: [8],         # MD needs NPT
+}
+
+STEP_NAMES = {
+    1: "Generate Protein Topology",
+    2: "Insert Ligand",
+    3: "Define Simulation Box",
+    4: "Solvate System",
+    5: "Energy Minimization",
+    6: "Index Generation",
+    7: "NVT Equilibration",
+    8: "NPT Equilibration",
+    9: "Production MD",
+}
+
+
+def get_done_flag_path(step_id: int, directory: str = ".") -> str:
+    """Get path to .done flag file for a step."""
+    return os.path.join(directory, f".step{step_id}.done")
+
+
+def is_step_complete(step_id: int, directory: str = ".") -> bool:
+    """Check if a step has completed (has .done flag)."""
+    return os.path.exists(get_done_flag_path(step_id, directory))
+
+
+def mark_step_complete(step_id: int, directory: str = ".") -> None:
+    """Mark a step as complete by creating .done flag."""
+    flag_path = get_done_flag_path(step_id, directory)
+    with open(flag_path, 'w') as f:
+        from datetime import datetime
+        f.write(f"Completed: {datetime.now().isoformat()}\n")
+
+
+def clear_step_flag(step_id: int, directory: str = ".") -> None:
+    """Remove .done flag for a step."""
+    flag_path = get_done_flag_path(step_id, directory)
+    if os.path.exists(flag_path):
+        os.remove(flag_path)
+
+
+def clear_all_flags(directory: str = ".") -> None:
+    """Remove all .done flags."""
+    for step_id in range(1, 10):
+        clear_step_flag(step_id, directory)
+
+
+def check_step_dependencies(step_id: int, directory: str = ".") -> Tuple[bool, List[int]]:
+    """
+    Check if all dependencies for a step are satisfied.
+    
+    Args:
+        step_id: Pipeline step ID
+        directory: Working directory
+    
+    Returns:
+        Tuple of (can_run: bool, missing_steps: list of incomplete step IDs)
+    """
+    deps = STEP_DEPENDENCIES.get(step_id, [])
+    missing = []
+    
+    for dep_id in deps:
+        if not is_step_complete(dep_id, directory):
+            missing.append(dep_id)
+    
+    return len(missing) == 0, missing
+
+
+def get_step_status_summary(directory: str = ".") -> dict:
+    """
+    Get completion status of all steps.
+    
+    Returns:
+        Dict mapping step_id to completion status
+    """
+    return {
+        step_id: is_step_complete(step_id, directory)
+        for step_id in range(1, 10)
+    }
+
+
+def check_output_exists(step_id: int, directory: str = ".") -> Tuple[bool, List[str]]:
+    """
+    Check if output files from a step already exist (for resume detection).
+    
+    Args:
+        step_id: Pipeline step ID
+        directory: Working directory
+    
+    Returns:
+        Tuple of (exists: bool, existing_files: list)
+    """
+    outputs = {
+        1: ["protein.gro", "topol.top"],
+        2: ["complex.gro"],
+        3: ["complex_box.gro"],
+        4: ["complex_solv.gro"],
+        5: ["em.gro", "em.tpr"],
+        6: ["index.ndx"],
+        7: ["nvt.gro", "nvt.tpr"],
+        8: ["npt.gro", "npt.tpr"],
+        9: ["md.xtc", "md.tpr"],
+    }
+    
+    step_outputs = outputs.get(step_id, [])
+    existing = []
+    
+    for filename in step_outputs:
+        if os.path.exists(os.path.join(directory, filename)):
+            existing.append(filename)
+    
+    return len(existing) > 0, existing
+

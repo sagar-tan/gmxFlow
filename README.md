@@ -1,92 +1,111 @@
 # gmxFlow
 
-A terminal user interface (TUI) application for running GROMACS molecular dynamics simulation pipelines.
+Terminal UI for GROMACS molecular dynamics simulation pipelines.
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![GROMACS](https://img.shields.io/badge/GROMACS-Required-green)
-
-## Features
-
-- **9-Step MD Pipeline**: Complete workflow from protein topology to production MD
-- **Interactive TUI**: Keyboard-driven menu navigation
-- **Real-time Output**: Live command output display
-- **Analysis Tools**: Trajectory cleaning, RMSD calculations
-- **Visualization**: VMD and xmgrace integration
-
-## Installation
+## Quick Start (Linux/WSL)
 
 ```bash
-# Clone or download gmxFlow
-git clone <repository-url>
-cd gmxFlow
+# 1. Copy gmxflow to your simulation directory
+cp -r /path/to/gmxFlow/* /path/to/simulation/
 
-# Install dependencies
-pip install -r requirements.txt
+# 2. Ensure GROMACS is available
+source /usr/local/gromacs/bin/GMXRC  # or your GROMACS path
 
-# Make executable (Linux/Mac)
+# 3. Run gmxFlow
+python3 gmxflow.py
+
+# OR install globally (optional)
 chmod +x gmxflow.py
-
-# Optional: Add to PATH
 sudo cp gmxflow.py /usr/local/bin/gmxflow
 ```
 
-## Requirements
+## Required Input Files
 
-- **Python >= 3.8**
-- **GROMACS** (gmx available in PATH)
-- **Optional**: VMD, xmgrace for visualization
+Place these files in your simulation directory:
+- `protein_only.pdb` - Protein structure
+- `ligand.gro` - Ligand coordinates
+- `ligand.itp` - Ligand topology
+- `minim.mdp`, `nvt.mdp`, `npt.mdp`, `md.mdp` - Parameter files
 
 ## Usage
 
 ```bash
-# Navigate to your simulation directory
-cd /path/to/your/simulation
+# Normal mode
+python3 gmxflow.py
 
-# Ensure required input files are present:
-# - protein_only.pdb
-# - ligand.gro
-# - ligand.itp
-# - minim.mdp, nvt.mdp, npt.mdp, md.mdp
+# Dry-run mode (shows commands without executing)
+python3 gmxflow.py --dry-run
 
-# Run gmxFlow
-python gmxflow.py
-# or if installed in PATH:
-gmxflow
+# Check version
+python3 gmxflow.py --version
 ```
 
 ## Pipeline Steps
 
-| Step | Name | Description |
-|------|------|-------------|
-| 1 | Generate Protein Topology | Run pdb2gmx to create topology |
-| 2 | Insert Ligand | Add ligand molecule to system |
-| 3 | Define Simulation Box | Create cubic simulation box |
-| 4 | Solvate System | Add water molecules |
-| 5 | Energy Minimization | Minimize system energy |
-| 6 | Index Generation | Create index groups |
-| 7 | NVT Equilibration | Temperature equilibration |
-| 8 | NPT Equilibration | Pressure equilibration |
-| 9 | Production MD | Run production simulation |
+| # | Step | Notes |
+|---|------|-------|
+| 1 | Generate Topology | **Interactive**: Select force field 15 (OPLS-AA) |
+| 2 | Insert Ligand | Automatic |
+| 3 | Define Box | Automatic |
+| 4 | Solvate | **Manual edit needed after** - see below |
+| 5 | Energy Minimization | Automatic |
+| 6 | Index Generation | **Interactive**: Create protein+ligand group |
+| 7 | NVT Equilibration | Automatic |
+| 8 | NPT Equilibration | Automatic |
+| 9 | Production MD | Automatic |
 
-## Keyboard Navigation
+## Step Locking
+
+Steps must run in order. Each creates a `.step#.done` flag.
+- Step 5 won't run until Steps 1-4 complete
+- Analysis won't run until Step 9 completes
+
+## Manual Edit After Step 4
+
+Edit `topol.top`:
+```
+; Add after #include "forcefield.itp"
+#include "ligand.itp"
+
+; Add to [ molecules ] section at bottom
+UNK     1
+```
+
+## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
 | `1-9` | Run pipeline step |
+| `P` | **Run full pipeline** |
 | `A` | Analysis tools |
-| `V` | Visualization menu |
+| `V` | Visualization (VMD/xmgrace) |
 | `F` | File check |
-| `R` | Reset step status |
-| `H` | Help |
+| `R` | Reset all .done flags |
 | `Q` | Quit |
 
-## Analysis Features
+## Testing in WSL
 
-- **Trajectory Cleaning**: Center and fit trajectory
-- **Backbone RMSD**: Calculate backbone RMSD
-- **Ligand RMSD**: Calculate ligand RMSD
-- **Protein-Ligand Distance**: Monitor binding distance
+```bash
+# In WSL, navigate to simulation folder with input files
+cd /mnt/c/your/simulation/folder
 
-## License
+# Copy gmxFlow files here (or access from Windows path)
+cp /path/to/gmxFlow/*.py .
 
-MIT License
+# Run
+python3 gmxflow.py
+```
+
+## Dependencies
+
+- **Python 3.8+**
+- **GROMACS** (`gmx` in PATH)
+- **Optional**: `rich` library (falls back to plain text if missing)
+- **Optional**: VMD, xmgrace
+
+## No Virtual Environment Required
+
+Works with system Python. Install rich optionally:
+```bash
+pip3 install rich  # Optional, for colored output
+```
