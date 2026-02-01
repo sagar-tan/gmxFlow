@@ -297,13 +297,13 @@ class GmxFlowApp:
             actions.add_row(
                 "[cyan][S][/] Settings",
                 "[cyan][M][/] Switch Mode",
-                "[cyan][G][/] Generate MDP",
+                "[cyan][V][/] Visualize",
                 "[cyan][R][/] Reset All"
             )
             self.console.print(Panel(actions, border_style="dim"))
         else:
             print("Actions: [1-9] Run Step | [A] Analysis | [P] Full Pipeline | [Q] Quit")
-            print("         [S] Settings | [M] Switch Mode | [G] Generate MDP | [R] Reset")
+            print("         [S] Settings | [M] Switch Mode | [V] Visualize | [R] Reset")
             print()
     
     def show_log_panel(self):
@@ -617,6 +617,49 @@ class GmxFlowApp:
         
         input("\n[Press Enter to continue...]")
     
+    def show_visualization_menu(self):
+        """Display and handle the visualization menu."""
+        self.clear_screen()
+        self.console.print("\n[bold cyan]📊 Visualization Menu[/]\n")
+        
+        # Get available xvg files
+        xvg_files = self.visualization.list_available_xvg_files()
+        
+        if not xvg_files:
+            self.console.print("[yellow]No .xvg files found in working directory.[/]")
+            self.console.print("[dim]Run analysis steps first to generate graphs.[/]")
+            input("\n[Press Enter to continue...]")
+            return
+        
+        # List files
+        self.console.print("[bold]Available graphs:[/]\n")
+        for i, f in enumerate(xvg_files, 1):
+            self.console.print(f"  [{i}] {f}")
+        self.console.print(f"\n  [0] Back to menu")
+        
+        choice = self.prompt("\nSelect graph to view", default="0")
+        
+        if choice == '0':
+            return
+        
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(xvg_files):
+                selected_file = xvg_files[idx]
+                success, msg = self.visualization.launch_xmgrace(selected_file)
+                if success:
+                    self.console.print(f"[green]✓ {msg}[/]")
+                    self.add_log(f"Launched xmgrace: {selected_file}", "INFO")
+                else:
+                    self.console.print(f"[red]✗ {msg}[/]")
+                    self.console.print("[dim]Install xmgrace: sudo apt install grace[/]")
+            else:
+                self.console.print("[yellow]Invalid selection[/]")
+        except ValueError:
+            self.console.print("[yellow]Invalid input[/]")
+        
+        input("\n[Press Enter to continue...]")
+    
     def switch_mode(self):
         """Switch between protein-only and protein-ligand modes."""
         self.console.print("\n[bold]Switch Simulation Mode[/]\n")
@@ -669,6 +712,9 @@ class GmxFlowApp:
             
             elif choice == 'm':
                 self.switch_mode()
+            
+            elif choice == 'v':
+                self.show_visualization_menu()
             
             elif choice == 'g':
                 self._generate_mdp_files()

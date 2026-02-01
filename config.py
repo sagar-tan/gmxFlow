@@ -83,8 +83,9 @@ PIPELINE_STEPS = [
     PipelineStep(
         id=6,
         name="Index Generation",
-        command="gmx make_ndx -f em.gro -o index.ndx",
-        post_steps=["Create Protein + Ligand index group"]
+        command="echo -e '1 | 13\\nq' | gmx make_ndx -f em.gro -o index.ndx",
+        produces=["index.ndx"],
+        post_steps=["Create Protein_LIG index group"]
     ),
     PipelineStep(
         id=7,
