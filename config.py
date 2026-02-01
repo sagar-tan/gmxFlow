@@ -119,8 +119,13 @@ class AnalysisStep:
 # Analysis features (for Protein+Ligand mode)
 ANALYSIS_STEPS = [
     AnalysisStep(
-        name="Trajectory Cleaning",
-        command="echo '1\n0' | gmx trjconv -s md.tpr -f md.xtc -o md_fit.xtc -center -pbc mol -ur compact -fit rot+trans",
+        name="Trajectory PBC Fix",
+        command="echo '1\n0' | gmx trjconv -s md.tpr -f md.xtc -o md_noPBC.xtc -center -pbc mol -ur compact",
+        output_file="md_noPBC.xtc"
+    ),
+    AnalysisStep(
+        name="Trajectory Fit",
+        command="echo '4\n0' | gmx trjconv -s md.tpr -f md_noPBC.xtc -o md_fit.xtc -fit rot+trans",
         output_file="md_fit.xtc"
     ),
     AnalysisStep(
