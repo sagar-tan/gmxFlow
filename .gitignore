@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+dist/
+build/
+build_venv/
+*.spec
+.gmxflow_settings.json
+.gmxflow_license
+WORKSHOP_KEYS_2026.txt
