@@ -8,7 +8,7 @@ from typing import List, Optional, Dict
 
 # Application metadata
 APP_NAME = "gmxFlow"
-APP_VERSION = "2026.0.1"
+APP_VERSION = "2026.0.2"
 APP_DESCRIPTION = "GROMACS Pipeline Manager"
 
 # Mandatory input files
@@ -211,32 +211,32 @@ PROTEIN_PIPELINE_STEPS = [
 PROTEIN_ANALYSIS_STEPS = [
     AnalysisStep(
         name="Trajectory Cleaning",
-        command="gmx trjconv -f md.xtc -s md.tpr -o md_noPBC.xtc -pbc mol -center",
+        command="echo '1\n0' | gmx trjconv -f md.xtc -s md.tpr -o md_noPBC.xtc -pbc mol -center",
         output_file="md_noPBC.xtc"
     ),
     AnalysisStep(
         name="Backbone RMSD",
-        command="gmx rms -f md_noPBC.xtc -s md.tpr -o rmsd.xvg",
+        command="echo '4\n4' | gmx rms -f md_noPBC.xtc -s md.tpr -o rmsd.xvg",
         output_file="rmsd.xvg"
     ),
     AnalysisStep(
         name="RMSD (ns scale)",
-        command="gmx rms -f md_noPBC.xtc -s md.tpr -o rmsd_ns.xvg -tu ns",
+        command="echo '4\n4' | gmx rms -f md_noPBC.xtc -s md.tpr -o rmsd_ns.xvg -tu ns",
         output_file="rmsd_ns.xvg"
     ),
     AnalysisStep(
         name="RMSF (C-alpha)",
-        command="gmx rmsf -f md_noPBC.xtc -s md.tpr -o rmsf_ca.xvg",
+        command="echo '3' | gmx rmsf -f md_noPBC.xtc -s md.tpr -o rmsf_ca.xvg",
         output_file="rmsf_ca.xvg"
     ),
     AnalysisStep(
         name="RMSF per Residue",
-        command="gmx rmsf -f md_noPBC.xtc -s md.tpr -o rmsf_res.xvg -res",
+        command="echo '1' | gmx rmsf -f md_noPBC.xtc -s md.tpr -o rmsf_res.xvg -res",
         output_file="rmsf_res.xvg"
     ),
     AnalysisStep(
         name="Radius of Gyration",
-        command="gmx gyrate -f md_noPBC.xtc -s md.tpr -o gyrate.xvg",
+        command="echo '1' | gmx gyrate -f md_noPBC.xtc -s md.tpr -o gyrate.xvg",
         output_file="gyrate.xvg"
     ),
 ]

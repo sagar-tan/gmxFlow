@@ -4,8 +4,14 @@ This guide covers the full installation process on a **fresh Ubuntu/Linux system
 
 ## Prerequisites
 
-Your GROMACS installation already provides most dependencies. Verify you have:
+If you are on a fresh WSL or Linux installation, many essential tools including Python might be missing. Install them before continuing:
 
+```bash
+sudo apt update
+sudo apt install -y python3 python3-pip git curl gcc
+```
+
+Verify your installation:
 ```bash
 # Check GCC (required: 11+)
 gcc --version
@@ -14,7 +20,7 @@ gcc --version
 python3 --version
 ```
 
-If you followed the GROMACS installation guide (with GCC 11 and CMake), you're ready.
+Your GROMACS installation will provide the rest of the required scientific dependencies.
 
 ---
 

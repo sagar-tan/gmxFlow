@@ -86,7 +86,7 @@ class GmxFlowApp:
         
         # Initialize components
         self.pipeline = PipelineExecutor(self.working_dir, self.current_steps)
-        self.analysis = AnalysisRunner(self.working_dir)
+        self.analysis = AnalysisRunner(self.working_dir, self.current_analysis)
         self.visualization = VisualizationManager(self.working_dir)
     
     def _update_mode_config(self):
@@ -799,6 +799,7 @@ class GmxFlowApp:
             self.settings["simulation_mode"] = new_mode
             save_settings(self.settings, self.working_dir)
             self.pipeline = PipelineExecutor(self.working_dir, self.current_steps)
+            self.analysis.set_analysis_steps(self.current_analysis)
             self.add_log(f"Switched to {new_name} mode", "INFO")
     
     def run(self):

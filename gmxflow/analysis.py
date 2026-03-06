@@ -8,7 +8,7 @@ import os
 from typing import Callable, Optional
 from dataclasses import dataclass
 
-from config import ANALYSIS_STEPS, AnalysisStep
+from config import ANALYSIS_STEPS, PROTEIN_ANALYSIS_STEPS, AnalysisStep
 
 
 @dataclass
@@ -25,12 +25,17 @@ class AnalysisResult:
 class AnalysisRunner:
     """Runs post-simulation analysis commands."""
     
-    def __init__(self, working_dir: str = "."):
+    def __init__(self, working_dir: str = ".", analysis_steps: list = None):
         self.working_dir = working_dir
+        self.analysis_steps = analysis_steps if analysis_steps is not None else ANALYSIS_STEPS
+    
+    def set_analysis_steps(self, steps: list):
+        """Update the analysis steps list (e.g. when switching mode)."""
+        self.analysis_steps = steps
     
     def get_analysis_steps(self) -> list[AnalysisStep]:
         """Get all available analysis steps."""
-        return ANALYSIS_STEPS
+        return self.analysis_steps
     
     def check_prerequisites(self) -> tuple[bool, list[str]]:
         """
@@ -39,7 +44,11 @@ class AnalysisRunner:
         Returns:
             Tuple of (ready: bool, missing_files: list)
         """
-        required = ["md.tpr", "md.xtc", "index.ndx"]
+        required = ["md.tpr", "md.xtc"]
+        # index.ndx is only required for protein+ligand analysis steps
+        needs_index = any("-n index.ndx" in s.command or "index.ndx" in s.command for s in self.analysis_steps)
+        if needs_index:
+            required.append("index.ndx")
         missing = []
         
         for filename in required:
@@ -66,7 +75,7 @@ class AnalysisRunner:
         Returns:
             AnalysisResult with execution details
         """
-        if step_index < 0 or step_index >= len(ANALYSIS_STEPS):
+        if step_index < 0 or step_index >= len(self.analysis_steps):
             return AnalysisResult(
                 name="Unknown",
                 success=False,
@@ -76,7 +85,7 @@ class AnalysisRunner:
                 error_message=f"Invalid analysis step index: {step_index}"
             )
         
-        step = ANALYSIS_STEPS[step_index]
+        step = self.analysis_steps[step_index]
         
         if on_output:
             on_output(f">>> Running: {step.name}")
@@ -143,25 +152,25 @@ class AnalysisRunner:
         on_output: Optional[Callable[[str], None]] = None
     ) -> AnalysisResult:
         """Run trajectory cleaning (first analysis step)."""
-        return self.run_analysis(0, on_output, interactive=True)
+        return self.run_analysis(0, on_output, interactive=False)
     
     def run_backbone_rmsd(
         self,
         on_output: Optional[Callable[[str], None]] = None
     ) -> AnalysisResult:
         """Calculate backbone RMSD."""
-        return self.run_analysis(1, on_output, interactive=True)
+        return self.run_analysis(1, on_output, interactive=False)
     
     def run_ligand_rmsd(
         self,
         on_output: Optional[Callable[[str], None]] = None
     ) -> AnalysisResult:
         """Calculate ligand RMSD."""
-        return self.run_analysis(2, on_output, interactive=True)
+        return self.run_analysis(2, on_output, interactive=False)
     
     def run_distance_analysis(
         self,
         on_output: Optional[Callable[[str], None]] = None
     ) -> AnalysisResult:
         """Calculate protein-ligand distance."""
-        return self.run_analysis(3, on_output, interactive=True)
+        return self.run_analysis(3, on_output, interactive=False)

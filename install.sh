@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="2026.0.1"
+VERSION="2026.0.2"
 REPO_URL="https://github.com/sagar-tan/gmxFlow.git"
 INSTALL_DIR="/usr/local/gmxflow"
 BIN_DIR="/usr/local/bin"

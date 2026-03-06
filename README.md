@@ -2,7 +2,7 @@
 
 Terminal UI for GROMACS molecular dynamics simulation pipelines.
 
-**Version: 2026.0.1** | **Workshop Exclusive**
+**Version: 2026.0.2** | **Workshop Exclusive**
 
 ## Installation
 
