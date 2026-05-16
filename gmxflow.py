@@ -7,7 +7,7 @@ Usage:
     gmxflow [--version] [--help] [--dry-run] [--protein] [--ligand]
 
 Author: gmxFlow Development Team
-Version: 2026.0.1
+Version: 2026.0.3
 """
 
 import sys
@@ -58,6 +58,11 @@ from utils import (
     patch_topology_for_ligand,
     bypass_step_flag,
     get_step_flags_status,
+    detect_ligand_forcefield,
+    get_gmx_forcefield_map,
+    find_best_ff_index,
+    purge_simulation_files,
+    ErrorAnalyzer,
 )
 from settings import (
     load_settings,
@@ -336,14 +341,19 @@ class GmxFlowApp:
                 "[cyan][V][/] Visualize",
                 "[cyan][R][/] Reset All",
             )
-            actions.add_row("[cyan][F][/] Bypass Flags", "", "", "")
+            actions.add_row(
+                "[cyan][F][/] Bypass Flags",
+                "[cyan][D][/] Deep Clean",
+                "",
+                ""
+            )
             self.console.print(Panel(actions, border_style="dim"))
         else:
             print(
                 "Actions: [1-9] Run Step | [A] Analysis | [P] Full Pipeline | [Q] Quit"
             )
             print("         [S] Settings | [M] Switch Mode | [V] Visualize | [R] Reset")
-            print("         [F] Bypass Flags")
+            print("         [F] Bypass Flags | [D] Deep Clean")
             print()
 
     def show_log_panel(self):
@@ -463,12 +473,54 @@ class GmxFlowApp:
         self.add_log("Generated MDP files", "INFO")
         input("\n[Press Enter to continue...]")
 
+    def _get_dynamic_ff_index(self) -> str:
+        """Automatically detect the best force field index."""
+        self.console.print("\n[cyan]🔍 Smart Force Field Detection...[/]")
+
+        # 1. Detect required FF from ligand.itp
+        ligand_itp = os.path.join(self.working_dir, "ligand.itp")
+        detected_ff = "OPLS"  # Default
+        if os.path.exists(ligand_itp):
+            detected_ff = detect_ligand_forcefield(ligand_itp)
+            self.console.print(f"  • Detected ligand format: [bold]{detected_ff}[/]")
+        else:
+            self.console.print("  • No ligand.itp found, defaulting to OPLS-AA")
+
+        # 2. Get system FF map
+        self.console.print("  • Querying GROMACS force field list...")
+        ff_map = get_gmx_forcefield_map()
+
+        # 3. Find the index
+        idx = find_best_ff_index(detected_ff, ff_map)
+        if idx is not None:
+            self.console.print(
+                f"  • Found [bold]{detected_ff}[/] at index [bold]{idx}[/] on this system."
+            )
+            return str(idx)
+        else:
+            self.console.print(
+                f"  • [yellow]Warning: Could not find {detected_ff} in GROMACS list.[/]"
+            )
+            return "15"  # Fallback
+
     def _offer_post_step_viz(self, step_id: int):
         """Offer visualization options after certain steps complete."""
         import os
 
+        # Mode-specific step mapping
+        if self.mode == "protein_ligand":
+            em_step = 6
+            nvt_step = 8
+            npt_step = 9
+            md_step = 10
+        else:
+            em_step = 6
+            nvt_step = 7
+            npt_step = 8
+            md_step = 9
+
         # Energy Minimization - offer potential energy plot
-        if step_id == 6 and self.mode == "protein_only":
+        if step_id == em_step:
             em_edr = os.path.join(self.working_dir, "em.edr")
             if os.path.exists(em_edr):
                 self.console.print("\n[cyan]📊 Visualization available:[/]")
@@ -484,23 +536,8 @@ class GmxFlowApp:
                         self.console.print("[green]✓ Created potential.xvg[/]")
                         self.add_log("Created potential.xvg", "INFO")
 
-        # Same for ligand mode EM (step 5)
-        if step_id == 5 and self.mode == "protein_ligand":
-            em_edr = os.path.join(self.working_dir, "em.edr")
-            if os.path.exists(em_edr):
-                self.console.print("\n[cyan]📊 Visualization available:[/]")
-                self.console.print(
-                    "   Extract potential energy: [dim]gmx energy -f em.edr -o potential.xvg[/]"
-                )
-                if self.confirm("Extract potential energy now?"):
-                    os.system(
-                        f"cd {self.working_dir} && echo '10\n0' | gmx energy -f em.edr -o potential.xvg"
-                    )
-                    if os.path.exists(os.path.join(self.working_dir, "potential.xvg")):
-                        self.console.print("[green]✓ Created potential.xvg[/]")
-
         # NVT/NPT - offer temperature/pressure plots
-        if step_id == 7:  # NVT
+        if step_id == nvt_step:
             nvt_edr = os.path.join(self.working_dir, "nvt.edr")
             if os.path.exists(nvt_edr):
                 self.console.print(
@@ -515,7 +552,7 @@ class GmxFlowApp:
                     ):
                         self.console.print("[green]✓ Created temperature.xvg[/]")
 
-        if step_id == 8:  # NPT
+        if step_id == npt_step:
             npt_edr = os.path.join(self.working_dir, "npt.edr")
             if os.path.exists(npt_edr):
                 self.console.print("\n[cyan]📊 Available:[/] Pressure/Density plots")
@@ -531,7 +568,7 @@ class GmxFlowApp:
                     )
 
         # Production MD - offer VMD launch
-        if step_id == 9:
+        if step_id == md_step:
             md_xtc = os.path.join(self.working_dir, "md.xtc")
             md_gro = os.path.join(self.working_dir, "md.gro")
             if os.path.exists(md_xtc) and os.path.exists(md_gro):
@@ -610,6 +647,16 @@ class GmxFlowApp:
         else:
             new_command = step.command
 
+        # Dynamic Force Field Injection for Step 1 (ligand) or Step 2 (protein)
+        is_ff_step = (self.mode == "protein_ligand" and step_id == 1) or (
+            self.mode == "protein_only" and step_id == 2
+        )
+
+        if is_ff_step and "pdb2gmx" in new_command and "echo" not in new_command:
+            ff_idx = self._get_dynamic_ff_index()
+            new_command = f"echo '{ff_idx}' | {new_command}"
+            self.console.print(f"[green]Smart-selected force field index: {ff_idx}[/]")
+
         self.add_log(f"Starting step {step_id}: {step.name}")
         self.console.print(f"\n[bold cyan]>>> Executing Step {step_id}: {step.name}[/]")
         self.console.print("[yellow]" + "─" * 60 + "[/]\n")
@@ -653,9 +700,21 @@ class GmxFlowApp:
             return True
         else:
             self.add_log(f"Step {step_id} failed", "ERROR")
-            self.console.print(f"\n[red]✗ Step {step_id} failed![/]")
+            self.console.print(f"\n[bold red]✗ Step {step_id} failed![/]")
+            
+            # Smart Error Analysis
+            combined_output = result.stdout + "\n" + result.stderr
+            suggestions = ErrorAnalyzer.analyze(combined_output)
+            
+            if suggestions:
+                self.console.print("\n[bold yellow]🔍 gmxFlow Auto-Analysis:[/]")
+                for sugg in suggestions:
+                    self.console.print(f"  [bold cyan]Diagnosis:[/] {sugg['diagnosis']}")
+                    self.console.print(f"  [bold green]Suggested Fix:[/] {sugg['fix']}\n")
+                self.add_log(f"Detected {len(suggestions)} known issues", "WARNING")
+            
             if result.error_message:
-                self.console.print(f"[red]  Error: {result.error_message}[/]")
+                self.console.print(f"[red]  Internal Error: {result.error_message}[/]")
             input("\n[Press Enter to continue...]")
             return False
 
@@ -679,14 +738,21 @@ class GmxFlowApp:
 
             # Force field selection
             self.console.print("[cyan]Available Force Fields:[/]")
-            self.console.print(
-                "  1: AMBER03  6: AMBER99SB  15: OPLS-AA/L (recommended)"
-            )
-            self.console.print("  2: AMBER94  7: AMBER99SB-ILDN")
-            self.console.print("  3: AMBER96  8: AMBERGS")
-            self.console.print("  4: AMBER99  14: GROMOS96 54a7")
+            ff_map = get_gmx_forcefield_map()
+            for idx, name in sorted(ff_map.items()):
+                self.console.print(f"  {idx:2}: {name}")
+            
+            # Detect recommended
+            detected_ff = "OPLS"
+            ligand_itp = os.path.join(self.working_dir, "ligand.itp")
+            if os.path.exists(ligand_itp):
+                detected_ff = detect_ligand_forcefield(ligand_itp)
+            
+            rec_idx = find_best_ff_index(detected_ff, ff_map)
+            default_ff = str(rec_idx) if rec_idx else "15"
+
             ff_choice = self.prompt(
-                "\nForce field [15=OPLS-AA recommended]", default="15"
+                f"\nForce field [default={detected_ff} ({default_ff})]", default=default_ff
             )
 
             if self.mode == "protein_only":
@@ -741,7 +807,9 @@ class GmxFlowApp:
 
         # Substitute force field input for pdb2gmx commands
         if "pdb2gmx" in command and "echo" not in command:
-            ff = inputs.get("force_field", "15")
+            ff = inputs.get("force_field")
+            if not ff:
+                ff = self._get_dynamic_ff_index()
             command = f"echo '{ff}' | {command}"
 
         # Substitute ion group for genion commands (protein-only mode)
@@ -795,8 +863,8 @@ class GmxFlowApp:
             self.print_separator()
             self.console.print("[bold cyan]Analysis Tools[/]\n")
 
-            if not is_step_complete(9, self.working_dir):
-                self.console.print("[yellow]⚠ Production MD (Step 9) not complete.[/]")
+            if not is_step_complete(10, self.working_dir):
+                self.console.print("[yellow]⚠ Production MD (Step 10) not complete.[/]")
                 self.console.print(
                     "[dim]Analysis may fail without MD output files.[/]\n"
                 )
@@ -1055,10 +1123,21 @@ class GmxFlowApp:
                 self._generate_mdp_files()
 
             elif choice == "r":
-                if self.confirm("Reset all step completion flags?"):
+                if self.confirm("Reset all completion flags? (Doesn't delete files)"):
                     clear_all_flags(self.working_dir)
                     self.pipeline.reset_all()
-                    self.add_log("All step flags cleared", "INFO")
+                    self.add_log("All progress flags reset", "INFO")
+            elif choice == "d":
+                if self.confirm("[bold red]⚠️ DEEP CLEAN:[/] This will delete all generated simulation files. Proceed?"):
+                    count, errors = purge_simulation_files(self.working_dir)
+                    clear_all_flags(self.working_dir)
+                    self.pipeline.reset_all()
+                    self.add_log(f"Deep clean complete: deleted {count} files", "INFO")
+                    if errors:
+                        for err in errors:
+                            self.add_log(err, "WARNING")
+                    self.console.print(f"\n[green]✓ Deep Clean finished. Deleted {count} files.[/]")
+                    input("\n[Press Enter to continue...]")
 
             elif choice == "f":
                 self.show_bypass_flags_menu()

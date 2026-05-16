@@ -59,7 +59,7 @@ You can start the tool in interactive mode, or bypass the mode selection directl
 
 ## 4. Pipeline Execution & Usage
 
-Once in the main interface, gmxFlow displays a system status panel verifying your `gmx` executable and input files. Below this, the 9-step pipeline is presented. 
+Once in the main interface, gmxFlow displays a system status panel verifying your `gmx` executable and input files. Below this, the 10-step pipeline (or 9 steps in Protein-Only mode) is presented. 
 
 ### Mandatory Input Files
 Place these in your working directory before beginning:
@@ -71,7 +71,7 @@ Use these keys from the main menu:
 
 | Key | Action |
 |-----|--------|
-| `1-9` | Run the corresponding step individually. Dependencies and output overwrites are checked automatically. |
+| `1-0` | Run the corresponding step individually (Step 10 is accessed by pressing `0`). Dependencies and output overwrites are checked automatically. |
 | `P` | Run the full pipeline automatically. You will be prompted upfront for force field choices and ion groups, after which execution requires no input. |
 | `A` | Open the Analysis menu to generate RMSD, RMSF, Radius of Gyration, or Ligand Distance plots. |
 | `V` | Open the Visualization menu to inspect `.xvg` graphs via `xmgrace`. |
@@ -94,7 +94,7 @@ Press `S` from the main menu to open the Simulation Settings. Here you can tweak
 
 ## 6. Analysis Tools
 
-When Production MD (Step 9) completes, press `A` to access analysis features tailored to your mode:
+When Production MD (Step 10 for Ligand mode, Step 9 for Protein-Only) completes, press `A` to access analysis features tailored to your mode:
 - **Protein Only**: Trajectory cleaning (PBC fixes), Backbone RMSD, RMSF (C-alpha and per-residue), and Radius of Gyration.
 - **Protein + Ligand**: PBC fixing, trajectory fitting, Ligand RMSD, and Protein-Ligand center-of-mass distance tracking.
 

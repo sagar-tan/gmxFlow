@@ -6,7 +6,7 @@ File validation, GROMACS checks, and helper functions.
 import os
 import shutil
 import subprocess
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 
 
 def check_gromacs_available() -> Tuple[bool, str]:
@@ -150,11 +150,12 @@ def get_step_prerequisites(step_id: int) -> List[str]:
         2: ["protein.gro", "ligand.gro"],
         3: ["complex.gro"],
         4: ["complex_box.gro", "topol.top", "ligand.itp"],
-        5: ["complex_solv.gro", "topol.top", "minim.mdp"],
-        6: ["em.gro"],
-        7: ["em.gro", "topol.top", "nvt.mdp", "index.ndx"],
-        8: ["nvt.gro", "nvt.cpt", "topol.top", "npt.mdp", "index.ndx"],
-        9: ["npt.gro", "npt.cpt", "topol.top", "md.mdp", "index.ndx"],
+        5: ["complex_solv.gro", "topol.top", "ions.mdp"],
+        6: ["complex_ions.gro", "topol.top", "minim.mdp"],
+        7: ["em.gro"],
+        8: ["em.gro", "topol.top", "nvt.mdp", "index.ndx"],
+        9: ["nvt.gro", "nvt.cpt", "topol.top", "npt.mdp", "index.ndx"],
+        10: ["npt.gro", "npt.cpt", "topol.top", "md.mdp", "index.ndx"],
     }
     return prerequisites.get(step_id, [])
 
@@ -178,15 +179,16 @@ def validate_step_ready(step_id: int, directory: str = ".") -> Tuple[bool, List[
 # === Step Locking System ===
 
 STEP_DEPENDENCIES = {
-    1: [],  # pdb2gmx - no deps
-    2: [1],  # insert-molecules needs pdb2gmx
-    3: [2],  # editconf needs insert-molecules
-    4: [3],  # solvate needs editconf
-    5: [4],  # EM needs solvate
-    6: [5],  # make_ndx needs EM
-    7: [6],  # NVT needs make_ndx
-    8: [7],  # NPT needs NVT
-    9: [8],  # MD needs NPT
+    1: [],      # pdb2gmx
+    2: [1],     # insert-molecules
+    3: [2],     # editconf
+    4: [3],     # solvate
+    5: [4],     # genion
+    6: [5],     # EM
+    7: [6],     # make_ndx
+    8: [7],     # NVT
+    9: [8],     # NPT
+    10: [9],    # MD
 }
 
 STEP_NAMES = {
@@ -194,11 +196,12 @@ STEP_NAMES = {
     2: "Insert Ligand",
     3: "Define Simulation Box",
     4: "Solvate System",
-    5: "Energy Minimization",
-    6: "Index Generation",
-    7: "NVT Equilibration",
-    8: "NPT Equilibration",
-    9: "Production MD",
+    5: "Add Ions (Neutralize)",
+    6: "Energy Minimization",
+    7: "Index Generation",
+    8: "NVT Equilibration",
+    9: "NPT Equilibration",
+    10: "Production MD",
 }
 
 
@@ -230,7 +233,7 @@ def clear_step_flag(step_id: int, directory: str = ".") -> None:
 
 def clear_all_flags(directory: str = ".") -> None:
     """Remove all .done flags."""
-    for step_id in range(1, 10):
+    for step_id in range(1, 11):
         clear_step_flag(step_id, directory)
 
 
@@ -264,7 +267,7 @@ def get_step_flags_status(directory: str = ".") -> list:
         List of tuples: (step_id, step_name, is_complete)
     """
     status = []
-    for step_id in range(1, 10):
+    for step_id in range(1, 11):
         name = STEP_NAMES.get(step_id, f"Step {step_id}")
         complete = is_step_complete(step_id, directory)
         status.append((step_id, name, complete))
@@ -301,7 +304,7 @@ def get_step_status_summary(directory: str = ".") -> dict:
     Returns:
         Dict mapping step_id to completion status
     """
-    return {step_id: is_step_complete(step_id, directory) for step_id in range(1, 10)}
+    return {step_id: is_step_complete(step_id, directory) for step_id in range(1, 11)}
 
 
 def check_output_exists(step_id: int, directory: str = ".") -> Tuple[bool, List[str]]:
@@ -320,11 +323,12 @@ def check_output_exists(step_id: int, directory: str = ".") -> Tuple[bool, List[
         2: ["complex.gro"],
         3: ["complex_box.gro"],
         4: ["complex_solv.gro"],
-        5: ["em.gro", "em.tpr"],
-        6: ["index.ndx"],
-        7: ["nvt.gro", "nvt.tpr"],
-        8: ["npt.gro", "npt.tpr"],
-        9: ["md.xtc", "md.tpr"],
+        5: ["complex_ions.gro"],
+        6: ["em.gro", "em.tpr"],
+        7: ["index.ndx"],
+        8: ["nvt.gro", "nvt.tpr"],
+        9: ["npt.gro", "npt.tpr"],
+        10: ["md.xtc", "md.tpr"],
     }
 
     step_outputs = outputs.get(step_id, [])
@@ -472,3 +476,176 @@ def check_topology_has_ligand(topol_path: str, directory: str = ".") -> bool:
             return "ligand.itp" in content
     except Exception:
         return False
+
+
+# === Smart Force Field Detection ===
+
+
+def detect_ligand_forcefield(itp_path: str) -> str:
+    """
+    Analyze ligand.itp to guess the force field.
+    Returns: "OPLS", "AMBER", "CHARMM", "GROMOS", or "Unknown"
+    """
+    if not os.path.exists(itp_path):
+        return "Unknown"
+
+    try:
+        with open(itp_path, "r") as f:
+            content = f.read().lower()
+            if "opls_" in content:
+                return "OPLS"
+            if "ca" in content and "ha" in content and "os" in content:
+                return "AMBER"
+            if "cga" in content or "cng2" in content:
+                return "CHARMM"
+            if "ch1" in content or "ch2" in content or "oa" in content:
+                return "GROMOS"
+    except Exception:
+        pass
+    return "Unknown"
+
+
+def get_gmx_forcefield_map() -> Dict[int, str]:
+    """
+    Query GROMACS for the list of available force fields.
+    Returns: Dict mapping index to name
+    """
+    ff_map = {}
+    try:
+        # We run pdb2gmx with a non-existent file to get it to list force fields
+        # and then we capture the output.
+        process = subprocess.Popen(
+            ["gmx", "pdb2gmx"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        # Give it a bit of time to print the menu and then kill it
+        try:
+            stdout, stderr = process.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+
+        # pdb2gmx prints the menu to stderr
+        menu_text = stderr if stderr else stdout
+        for line in menu_text.split("\n"):
+            line = line.strip()
+            if ":" in line and line[0].isdigit():
+                parts = line.split(":", 1)
+                idx = int(parts[0].strip())
+                name = parts[1].strip()
+                ff_map[idx] = name
+    except Exception:
+        pass
+    return ff_map
+
+
+def find_best_ff_index(target_name: str, ff_map: Dict[int, str]) -> Optional[int]:
+    """
+    Find the best index in ff_map for a given target force field name.
+    """
+    target_name = target_name.upper()
+    for idx, name in ff_map.items():
+        name_up = name.upper()
+        if target_name in name_up:
+            return idx
+    return None
+
+
+# === Deep Clean / Purge System ===
+
+
+def purge_simulation_files(directory: str = ".") -> Tuple[int, List[str]]:
+    """
+    Delete all generated simulation files to allow a fresh start.
+    Keeps mandatory input files.
+    
+    Returns:
+        Tuple of (count_deleted, errors)
+    """
+    # Files we definitely want to delete
+    patterns = [
+        "*.gro", "topol.top", "*.itp", "*.tpr", "*.edr", "*.log", 
+        "*.xtc", "*.trr", "*.xvg", "posre*", "*.ndx", ".step*.done",
+        "*.mdp" # Delete generated MDPs too
+    ]
+    
+    # Files we must NOT delete (inputs)
+    keep = [
+        "protein_only.pdb", "Protein.pdb", "ligand.gro", "ligand.itp",
+        "gmxflow.py", "config.py", "utils.py", "pipeline.py", 
+        "settings.py", "visualization.py", "analysis.py", "license_check.py"
+    ]
+    
+    import glob
+    
+    deleted_count = 0
+    errors = []
+    
+    for pattern in patterns:
+        for filepath in glob.glob(os.path.join(directory, pattern)):
+            filename = os.path.basename(filepath)
+            if filename in keep:
+                continue
+            
+            try:
+                if os.path.isfile(filepath):
+                    os.remove(filepath)
+                    deleted_count += 1
+            except Exception as e:
+                errors.append(f"Failed to delete {filename}: {str(e)}")
+                
+    return deleted_count, errors
+
+
+# === Intelligent Error Analyzer ===
+
+
+class ErrorAnalyzer:
+    """Analyzes GROMACS output to suggest fixes for common errors."""
+    
+    KNOWLEDGE_BASE = {
+        "LJ-14": {
+            "pattern": r"No default LJ-14 types",
+            "diagnosis": "Force Field Mismatch! Your protein force field and ligand topology don't match.",
+            "fix": "Re-run Step 1 and select a force field compatible with your ligand (e.g., OPLS for OPLS ligands)."
+        },
+        "NET_CHARGE": {
+            "pattern": r"System has non-zero total charge",
+            "diagnosis": "Unbalanced system charge detected.",
+            "fix": "Run the 'Add Ions (Neutralize)' step to add counter-ions."
+        },
+        "SOLVENT_ION": {
+            "pattern": r"Not enough solvent for adding ions",
+            "diagnosis": "You tried to replace a molecule that isn't solvent (like your ligand) with ions.",
+            "fix": "Ensure you select the 'SOL' or 'Water' group when prompted for ion replacement."
+        },
+        "NS_TYPE": {
+            "pattern": r"Ignoring obsolete mdp entry 'ns_type'",
+            "diagnosis": "Using an outdated MDP parameter for this GROMACS version.",
+            "fix": "This is just a warning, but you can remove 'ns_type' from your .mdp files to clean up logs."
+        },
+        "PDB2GMX_H": {
+            "pattern": r"Atom H.* not found in residue",
+            "diagnosis": "Missing or mismatched hydrogen atoms in your PDB.",
+            "fix": "Try adding the '-ignh' flag to your pdb2gmx command (enabled by default in gmxFlow)."
+        }
+    }
+    
+    @staticmethod
+    def analyze(output: str) -> List[Dict[str, str]]:
+        """Scan output for known issues and return suggestions."""
+        import re
+        suggestions = []
+        
+        for key, info in ErrorAnalyzer.KNOWLEDGE_BASE.items():
+            if re.search(info["pattern"], output, re.IGNORECASE):
+                suggestions.append({
+                    "id": key,
+                    "diagnosis": info["diagnosis"],
+                    "fix": info["fix"]
+                })
+        
+        return suggestions
