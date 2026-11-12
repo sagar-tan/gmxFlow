@@ -8,7 +8,7 @@ from typing import List, Optional, Dict
 
 # Application metadata
 APP_NAME = "gmxFlow"
-APP_VERSION = "2026.0.2"
+APP_VERSION = "2026.0.3"
 APP_DESCRIPTION = "GROMACS Pipeline Manager"
 
 # Mandatory input files
@@ -29,7 +29,7 @@ BANNER = r"""
    ██║  ███╗██╔████╔██║ ╚███╔╝ █████╗  ██║     ██║   ██║██║ █╗ ██║
    ██║   ██║██║╚██╔╝██║ ██╔██╗ ██╔══╝  ██║     ██║   ██║██║███╗██║
    ╚██████╔╝██║ ╚═╝ ██║██╔╝ ██╗██║     ███████╗╚██████╔╝╚███╔███╔╝
-    ╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝     ╚══════╝ ╚═════╝  ╚══╝╚══╝ 
+    ╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝     ╚══════╝ ╚═════╝  ╚══╝╚══╝  --Sagar Tanwar
 """
 
 
@@ -51,7 +51,7 @@ PIPELINE_STEPS = [
     PipelineStep(
         id=1,
         name="Generate Protein Topology",
-        command="echo '15' | gmx pdb2gmx -f protein_only.pdb -o protein.gro -water spce -ignh",
+        command="gmx pdb2gmx -f protein_only.pdb -o protein.gro -water spce -ignh",
         produces=["protein.gro", "topol.top"]
     ),
     PipelineStep(
@@ -75,31 +75,37 @@ PIPELINE_STEPS = [
     ),
     PipelineStep(
         id=5,
-        name="Energy Minimization",
-        command="gmx grompp -f minim.mdp -c complex_solv.gro -p topol.top -o em.tpr -maxwarn 1 && gmx mdrun -v -deffnm em",
-        produces=["em.gro", "em.edr"]
+        name="Add Ions (Neutralize)",
+        command="gmx grompp -f ions.mdp -c complex_solv.gro -p topol.top -o ions.tpr -maxwarn 1 && echo '15' | gmx genion -s ions.tpr -o complex_ions.gro -p topol.top -pname NA -nname CL -neutral",
+        produces=["complex_ions.gro"]
     ),
     PipelineStep(
         id=6,
+        name="Energy Minimization",
+        command="gmx grompp -f minim.mdp -c complex_ions.gro -p topol.top -o em.tpr -maxwarn 1 && gmx mdrun -v -deffnm em",
+        produces=["em.gro", "em.edr"]
+    ),
+    PipelineStep(
+        id=7,
         name="Index Generation",
         command="echo -e '1 | 13\\nq' | gmx make_ndx -f em.gro -o index.ndx",
         produces=["index.ndx"],
         post_steps=["Create Protein_LIG index group"]
     ),
     PipelineStep(
-        id=7,
+        id=8,
         name="NVT Equilibration",
         command="gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -n index.ndx -o nvt.tpr -maxwarn 1 && gmx mdrun -v -deffnm nvt",
         produces=["nvt.gro", "nvt.edr"]
     ),
     PipelineStep(
-        id=8,
+        id=9,
         name="NPT Equilibration",
         command="gmx grompp -f npt.mdp -c nvt.gro -r nvt.gro -t nvt.cpt -p topol.top -n index.ndx -o npt.tpr -maxwarn 1 && gmx mdrun -v -deffnm npt",
         produces=["npt.gro", "npt.edr"]
     ),
     PipelineStep(
-        id=9,
+        id=10,
         name="Production MD",
         command="gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -n index.ndx -o md.tpr -maxwarn 1 && gmx mdrun -v -deffnm md",
         produces=["md.xtc", "md.edr", "md.gro"]
@@ -163,7 +169,7 @@ PROTEIN_PIPELINE_STEPS = [
     PipelineStep(
         id=2,
         name="Protein Topology Generation",
-        command="echo '15' | gmx pdb2gmx -f clean.pdb -o protein.gro -water spce -ignh",
+        command="gmx pdb2gmx -f clean.pdb -o protein.gro -water spce -ignh",
         produces=["protein.gro", "topol.top"]
     ),
     PipelineStep(
