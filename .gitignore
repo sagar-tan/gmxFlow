@@ -7,3 +7,4 @@ build_venv/
 .gmxflow_settings.json
 .gmxflow_license
 WORKSHOP_KEYS_2026.txt
+.claude/
